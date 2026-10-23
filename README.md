@@ -1,6 +1,6 @@
 # Work Gallery
 
-Portfólio criativo estático com uma abertura animada inspirada em uma pequena loja ilustrada. A experiência inteira foi construída em HTML, CSS, JavaScript e SVG, sem dependências ou etapa de build.
+Portfólio criativo estático construído em torno de uma maquete vetorial 3D de um pequeno atelier. Cada detalhe visual está no próprio `index.html`, usando apenas HTML, CSS, SVG inline e JavaScript — sem imagens rasterizadas, dependências ou etapa de build.
 
 ## Executar localmente
 
