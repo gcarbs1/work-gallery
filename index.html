@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Work Gallery — portfólio criativo e experiências digitais.">
+  <meta name="theme-color" content="#f4efe3">
+  <title>Work Gallery — Creative Portfolio</title>
+  <style>
+    :root {
+      --ink: #183330;
+      --paper: #f4efe3;
+      --paper-deep: #e8dfcd;
+      --coral: #ef6b55;
+      --mustard: #e7b34d;
+      --teal: #77aaa0;
+      --sky: #b9d5cf;
+      --line: rgba(24, 51, 48, .18);
+      --ease-out: cubic-bezier(.18, .85, .28, 1.1);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; }
+
+    button, a { -webkit-tap-highlight-color: transparent; }
+
+    .paper-noise {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      opacity: .16;
+      mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E");
+    }
+
+    /* Entrance */
+    .intro {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(255,255,255,.9), transparent 45%),
+        var(--paper);
+      transition: opacity 1s ease, visibility 1s ease;
+    }
+
+    .intro::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: .32;
+      background-image:
+        linear-gradient(rgba(24,51,48,.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(24,51,48,.08) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: radial-gradient(circle, #000 15%, transparent 68%);
+    }
+
+    .intro.is-finished {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .intro__topline {
+      position: absolute;
+      top: clamp(20px, 4vw, 42px);
+      left: clamp(20px, 5vw, 64px);
+      right: clamp(20px, 5vw, 64px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      letter-spacing: .19em;
+      text-transform: uppercase;
+      opacity: 0;
+      animation: soft-in .7s .3s forwards;
+    }
+
+    .intro__counter::after {
+      content: "01 / 01";
+    }
+
+    .scene-wrap {
+      position: relative;
+      width: min(88vw, 620px);
+      aspect-ratio: 1 / 1.06;
+      transform: translateY(1.5vh);
+      animation: camera-in 5.6s cubic-bezier(.2,.8,.2,1) both;
+    }
+
+    .scene {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      filter: drop-shadow(0 32px 20px rgba(24,51,48,.12));
+    }
+
+    .sketch {
+      stroke: var(--ink);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .fine { stroke-width: 1.35; opacity: .78; }
+
+    .part {
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center bottom;
+      animation: build .72s var(--ease-out) forwards;
+      animation-delay: var(--delay, 0s);
+    }
+
+    .draw {
+      stroke-dasharray: 1200;
+      stroke-dashoffset: 1200;
+      animation: draw 1.2s ease forwards;
+      animation-delay: var(--delay, 0s);
+    }
+
+    .ground-line {
+      stroke-dasharray: 900;
+      stroke-dashoffset: 900;
+      animation: draw 1s .2s ease-out forwards;
+    }
+
+    .awning { transform-origin: center top; }
+
+    .curtain {
+      transform-box: fill-box;
+      transform-origin: center top;
+      animation: build .55s var(--ease-out) forwards, curtain 2.7s ease-in-out infinite;
+      animation-delay: var(--delay), calc(var(--delay) + .6s);
+    }
+
+    .lantern {
+      transform-origin: center top;
+      animation: build .55s var(--ease-out) forwards, lantern 2.4s ease-in-out infinite;
+      animation-delay: var(--delay), calc(var(--delay) + .55s);
+    }
+
+    .window-glow {
+      opacity: 0;
+      animation: lights-on 1.2s 3.5s ease forwards;
+    }
+
+    .steam {
+      fill: none;
+      stroke: rgba(24,51,48,.48);
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-dasharray: 20 18;
+      opacity: 0;
+      animation: steam 2.4s 3.8s ease-in-out infinite;
+    }
+
+    .plant-leaf {
+      transform-box: fill-box;
+      transform-origin: center bottom;
+      animation: build .5s var(--ease-out) forwards, leaf 2.8s ease-in-out infinite alternate;
+      animation-delay: var(--delay), calc(var(--delay) + .5s);
+    }
+
+    .shop-title {
+      font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: .11em;
+      fill: var(--ink);
+    }
+
+    .enter-prompt {
+      position: absolute;
+      left: 50%;
+      bottom: clamp(18px, 4vh, 42px);
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      padding: 10px 15px;
+      color: var(--ink);
+      border: 1px solid rgba(24,51,48,.3);
+      border-radius: 99px;
+      background: rgba(244,239,227,.74);
+      backdrop-filter: blur(8px);
+      font: 500 10px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      cursor: pointer;
+      opacity: 0;
+      transform: translate(-50%, 10px);
+      animation: prompt-in .8s 4.6s forwards;
+      transition: color .2s, background .2s, transform .2s;
+    }
+
+    .enter-prompt:hover {
+      color: var(--paper);
+      background: var(--ink);
+      transform: translate(-50%, 7px);
+    }
+
+    .enter-prompt span {
+      display: grid;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      font-size: 12px;
+    }
+
+    .skip {
+      position: absolute;
+      right: clamp(18px, 4vw, 48px);
+      bottom: clamp(18px, 4vw, 38px);
+      padding: 8px;
+      border: 0;
+      color: var(--ink);
+      background: none;
+      font: 500 9px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      letter-spacing: .14em;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+      text-transform: uppercase;
+      cursor: pointer;
+      opacity: .52;
+    }
+
+    /* Portfolio */
+    .site-shell {
+      min-height: 100vh;
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity .8s .25s ease, transform .8s .25s ease;
+    }
+
+    body.ready .site-shell { opacity: 1; transform: none; }
+
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      width: 100%;
+      padding: 24px clamp(20px, 4vw, 58px);
+      mix-blend-mode: multiply;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      width: max-content;
+      font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .brand__mark {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      color: var(--paper);
+      border-radius: 50%;
+      background: var(--ink);
+      font-size: 10px;
+    }
+
+    .nav__links { display: flex; gap: 30px; }
+
+    .nav__links a,
+    .contact-link {
+      position: relative;
+      font-size: 10px;
+      letter-spacing: .13em;
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+
+    .nav__links a::after,
+    .contact-link::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      bottom: -5px;
+      left: 0;
+      height: 1px;
+      background: currentColor;
+      transform: scaleX(0);
+      transform-origin: right;
+      transition: transform .3s ease;
+    }
+
+    .nav__links a:hover::after,
+    .contact-link:hover::after {
+      transform: scaleX(1);
+      transform-origin: left;
+    }
+
+    .contact-link { justify-self: end; }
+
+    .hero {
+      position: relative;
+      display: grid;
+      min-height: 100svh;
+      align-items: end;
+      padding: 130px clamp(20px, 6vw, 88px) clamp(40px, 7vw, 82px);
+      overflow: hidden;
+    }
+
+    .hero__eyebrow {
+      position: absolute;
+      top: 27%;
+      left: clamp(20px, 6vw, 88px);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 10px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .hero__eyebrow::before {
+      content: "";
+      width: 28px;
+      height: 1px;
+      background: currentColor;
+    }
+
+    .hero h1 {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0;
+      font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+      font-size: clamp(54px, 10.5vw, 154px);
+      font-weight: 600;
+      line-height: .82;
+      letter-spacing: -.075em;
+    }
+
+    .hero h1 em {
+      display: block;
+      margin-left: clamp(22px, 10vw, 150px);
+      color: var(--coral);
+      font-style: normal;
+    }
+
+    .hero__orb {
+      position: absolute;
+      top: 20%;
+      right: 7%;
+      width: clamp(150px, 22vw, 340px);
+      aspect-ratio: 1;
+      border: 1px solid rgba(24,51,48,.35);
+      border-radius: 49% 51% 56% 44% / 58% 42% 58% 42%;
+      background: var(--mustard);
+      box-shadow: inset 18px -22px 0 rgba(255,255,255,.18);
+      animation: orb 9s ease-in-out infinite;
+    }
+
+    .hero__orb::before,
+    .hero__orb::after {
+      content: "";
+      position: absolute;
+      border: 1px solid var(--ink);
+      border-radius: inherit;
+    }
+
+    .hero__orb::before { inset: 10%; transform: rotate(22deg); }
+    .hero__orb::after { inset: 23%; transform: rotate(-19deg); }
+
+    .hero__meta {
+      position: absolute;
+      right: clamp(20px, 6vw, 88px);
+      bottom: clamp(46px, 7vw, 88px);
+      display: flex;
+      max-width: 240px;
+      gap: 18px;
+      align-items: flex-start;
+      font-size: 10px;
+      line-height: 1.7;
+      text-transform: uppercase;
+    }
+
+    .hero__meta b {
+      width: 8px;
+      height: 8px;
+      margin-top: 4px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #61a45c;
+      box-shadow: 0 0 0 5px rgba(97,164,92,.15);
+    }
+
+    .marquee {
+      display: flex;
+      overflow: hidden;
+      padding: 14px 0;
+      color: var(--paper);
+      background: var(--ink);
+      transform: rotate(-1deg) scale(1.02);
+    }
+
+    .marquee__track {
+      display: flex;
+      min-width: max-content;
+      animation: marquee 24s linear infinite;
+    }
+
+    .marquee span {
+      padding-right: 40px;
+      font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+      font-size: clamp(14px, 2vw, 22px);
+      font-weight: 600;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .work {
+      padding: 140px clamp(20px, 6vw, 88px) 120px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      padding-bottom: 22px;
+      border-bottom: 1px solid var(--line);
+      font-size: 10px;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+
+    .projects {
+      display: grid;
+      grid-template-columns: 1.25fr .75fr;
+      gap: clamp(16px, 3vw, 42px);
+      margin-top: 42px;
+    }
+
+    .project {
+      text-decoration: none;
+    }
+
+    .project:nth-child(3) { grid-column: 1 / -1; }
+
+    .project__visual {
+      position: relative;
+      min-height: 420px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: var(--sky);
+    }
+
+    .project:nth-child(2) .project__visual { background: var(--coral); }
+    .project:nth-child(3) .project__visual { min-height: 360px; background: var(--mustard); }
+
+    .project__visual::before,
+    .project__visual::after {
+      content: "";
+      position: absolute;
+      border: 2px solid var(--ink);
+      transition: transform .7s cubic-bezier(.2,.8,.2,1);
+    }
+
+    .project__visual::before {
+      inset: 18% 22%;
+      border-radius: 50%;
+      background: var(--paper);
+      box-shadow: 15px 18px 0 rgba(24,51,48,.14);
+    }
+
+    .project__visual::after {
+      top: 32%;
+      right: 30%;
+      bottom: 32%;
+      left: 30%;
+      transform: rotate(25deg);
+    }
+
+    .project:hover .project__visual::before { transform: rotate(-7deg) scale(1.04); }
+    .project:hover .project__visual::after { transform: rotate(42deg) scale(.9); }
+
+    .project__number {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      z-index: 1;
+      font-size: 10px;
+    }
+
+    .project__arrow {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      z-index: 1;
+      display: grid;
+      width: 48px;
+      height: 48px;
+      place-items: center;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      font-size: 20px;
+      transition: color .25s, background .25s, transform .25s;
+    }
+
+    .project:hover .project__arrow {
+      color: var(--paper);
+      background: var(--ink);
+      transform: rotate(-35deg);
+    }
+
+    .project__info {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 2px 38px;
+    }
+
+    .project__info h2 {
+      margin: 0;
+      font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+      font-size: clamp(22px, 3vw, 42px);
+      letter-spacing: -.04em;
+    }
+
+    .project__info p {
+      margin: 5px 0 0;
+      font-size: 9px;
+      letter-spacing: .1em;
+      text-align: right;
+      text-transform: uppercase;
+    }
+
+    footer {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 32px;
+      align-items: end;
+      padding: 80px clamp(20px, 6vw, 88px) 32px;
+      color: var(--paper);
+      background: var(--ink);
+    }
+
+    footer h2 {
+      margin: 0;
+      font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+      font-size: clamp(48px, 10vw, 140px);
+      font-weight: 600;
+      line-height: .84;
+      letter-spacing: -.07em;
+    }
+
+    footer a { font-size: 11px; text-underline-offset: 6px; }
+
+    @keyframes build {
+      0% { opacity: 0; transform: translateY(-38px) scale(.84) rotate(-2deg); }
+      62% { opacity: 1; transform: translateY(5px) scale(1.025) rotate(.5deg); }
+      100% { opacity: 1; transform: none; }
+    }
+
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes soft-in { to { opacity: .7; } }
+    @keyframes prompt-in { to { opacity: 1; transform: translate(-50%, 0); } }
+    @keyframes lights-on { 0% { opacity: 0; } 45% { opacity: .9; } 60% { opacity: .4; } 100% { opacity: .76; } }
+    @keyframes camera-in { 0% { transform: translateY(5vh) scale(.72); } 72% { transform: translateY(1.5vh) scale(1); } 100% { transform: translateY(1.5vh) scale(1.02); } }
+    @keyframes curtain { 0%,100% { transform: skewX(0deg); } 50% { transform: skewX(2.2deg); } }
+    @keyframes lantern { 0%,100% { transform: rotate(-1.5deg); } 50% { transform: rotate(2deg); } }
+    @keyframes leaf { from { transform: rotate(-2deg); } to { transform: rotate(4deg); } }
+    @keyframes steam { 0% { opacity: 0; stroke-dashoffset: 40; transform: translateY(8px); } 35% { opacity: .65; } 100% { opacity: 0; stroke-dashoffset: 0; transform: translateY(-17px); } }
+    @keyframes orb { 0%,100% { transform: rotate(0) translateY(0); border-radius: 49% 51% 56% 44% / 58% 42% 58% 42%; } 50% { transform: rotate(8deg) translateY(-12px); border-radius: 57% 43% 47% 53% / 44% 52% 48% 56%; } }
+    @keyframes marquee { to { transform: translateX(-50%); } }
+
+    @media (max-width: 760px) {
+      .nav { grid-template-columns: 1fr auto; padding-top: 18px; }
+      .nav__links { display: none; }
+      .hero { padding-bottom: 110px; }
+      .hero__eyebrow { top: 22%; }
+      .hero__orb { top: 24%; right: -12%; opacity: .72; }
+      .hero h1 { font-size: clamp(52px, 18vw, 92px); }
+      .hero h1 em { margin-left: 0; }
+      .hero__meta { right: auto; bottom: 38px; left: 24px; }
+      .projects { grid-template-columns: 1fr; }
+      .project:nth-child(3) { grid-column: auto; }
+      .project__visual, .project:nth-child(3) .project__visual { min-height: 330px; }
+      .scene-wrap { width: min(105vw, 560px); }
+      .intro__topline { font-size: 8px; }
+      footer { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; }
+      .intro { transition-duration: .2s; }
+    }
+  </style>
+  <noscript><style>.intro{display:none}.site-shell{opacity:1;transform:none}</style></noscript>
+</head>
+<body>
+  <div class="paper-noise" aria-hidden="true"></div>
+
+  <section class="intro" id="intro" aria-label="Animação de entrada">
+    <div class="intro__topline">
+      <span>Building a small place for big ideas</span>
+      <span class="intro__counter" aria-label="Cena 1 de 1"></span>
+    </div>
+
+    <div class="scene-wrap" aria-hidden="true">
+      <svg class="scene" viewBox="0 0 620 650" role="img">
+        <defs>
+          <linearGradient id="wall" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#f4dca7"/>
+            <stop offset="1" stop-color="#dfbd7d"/>
+          </linearGradient>
+          <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#badbd4"/>
+            <stop offset="1" stop-color="#729b92"/>
+          </linearGradient>
+          <pattern id="roofTiles" width="26" height="18" patternUnits="userSpaceOnUse">
+            <path d="M0 2 Q13 18 26 2 M0 2H26" fill="none" stroke="#183330" stroke-width="1.35" opacity=".78"/>
+          </pattern>
+          <filter id="wobble">
+            <feTurbulence baseFrequency=".015" numOctaves="2" seed="4" result="noise"/>
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2"/>
+          </filter>
+        </defs>
+
+        <ellipse class="part" style="--delay:.1s" cx="310" cy="578" rx="230" ry="28" fill="#d6ccba" opacity=".5"/>
+        <path class="ground-line sketch" d="M45 576c118-9 411-8 532 0" fill="none"/>
+
+        <!-- Ground floor -->
+        <g class="part" style="--delay:.45s" filter="url(#wobble)">
+          <path class="sketch" d="M164 382H454V563H166Z" fill="url(#wall)"/>
+          <path class="sketch fine" d="M176 393v157M443 393v158M189 417h240M188 531h242" fill="none"/>
+          <rect class="sketch" x="256" y="437" width="110" height="126" fill="#a86547"/>
+          <rect class="sketch" x="267" y="453" width="87" height="110" fill="#6e4937"/>
+          <path class="sketch fine" d="M279 467h64M279 482h64M279 497h64M279 512h64M290 454v108M330 454v108" fill="none"/>
+          <circle cx="340" cy="512" r="3" fill="#e7b34d" stroke="#183330" stroke-width="1.5"/>
+          <rect class="sketch" x="181" y="436" width="61" height="85" fill="#e9efe5"/>
+          <rect class="sketch fine" x="190" y="446" width="43" height="58" fill="#9ec7c1"/>
+          <path class="sketch fine" d="M193 490l13-15 10 10 13-20" fill="none"/>
+          <rect class="sketch" x="379" y="436" width="58" height="85" fill="#e9efe5"/>
+          <rect class="sketch fine" x="388" y="446" width="40" height="58" fill="#9ec7c1"/>
+          <path class="sketch fine" d="M392 461h32M392 473h32M392 485h32" fill="none"/>
+        </g>
+
+        <!-- Upper floor -->
+        <g class="part" style="--delay:1.05s" filter="url(#wobble)">
+          <path class="sketch" d="M183 210H435L446 382H173Z" fill="#d9bc8d"/>
+          <rect class="sketch" x="204" y="238" width="206" height="113" fill="url(#glass)"/>
+          <path class="window-glow" d="M210 244H404V345H210Z" fill="#f5cc74"/>
+          <path class="sketch fine" d="M255 239v112M307 239v112M358 239v112M205 294h204" fill="none"/>
+          <path class="sketch fine" d="M189 224h232M190 365h233" fill="none"/>
+          <rect class="sketch" x="192" y="355" width="236" height="20" fill="#78a99e"/>
+        </g>
+
+        <!-- Awning and curtains -->
+        <g class="part awning" style="--delay:1.72s" filter="url(#wobble)">
+          <path class="sketch" d="M145 381L474 381 457 420H162Z" fill="#f0e9d9"/>
+          <path class="sketch fine" d="M174 382l-3 38M205 382l-2 38M237 382l-1 38M269 382v38M301 382v38M333 382v38M365 382l1 38M397 382l2 38M429 382l3 38M459 382l-5 38" fill="none"/>
+          <path class="sketch" d="M157 420H463" fill="none"/>
+        </g>
+        <g filter="url(#wobble)">
+          <path class="part curtain sketch" style="--delay:2.02s" d="M181 415h42v37l-10-6-11 7-11-7-10 6z" fill="#ef6b55"/>
+          <path class="part curtain sketch" style="--delay:2.12s" d="M225 415h42v37l-10-6-11 7-11-7-10 6z" fill="#f0e9d9"/>
+          <path class="part curtain sketch" style="--delay:2.22s" d="M269 415h42v37l-10-6-11 7-11-7-10 6z" fill="#ef6b55"/>
+          <path class="part curtain sketch" style="--delay:2.32s" d="M313 415h42v37l-10-6-11 7-11-7-10 6z" fill="#f0e9d9"/>
+          <path class="part curtain sketch" style="--delay:2.42s" d="M357 415h42v37l-10-6-11 7-11-7-10 6z" fill="#ef6b55"/>
+          <path class="part curtain sketch" style="--delay:2.52s" d="M401 415h42v37l-10-6-11 7-11-7-10 6z" fill="#f0e9d9"/>
+        </g>
+
+        <!-- Roof -->
+        <g class="part" style="--delay:2.35s" filter="url(#wobble)">
+          <path class="sketch" d="M145 210L181 170H437L474 210Z" fill="#5f8f88"/>
+          <path class="sketch" d="M130 216Q308 183 488 216L469 234Q309 205 149 234Z" fill="#77aaa0"/>
+          <path d="M145 209L181 170H437L474 209Z" fill="url(#roofTiles)"/>
+          <path class="sketch fine" d="M179 170c68 12 188 12 259 0M162 190c92 17 205 16 294 0" fill="none"/>
+          <path class="sketch" d="M128 215q12 13 22 0 11 16 22 1 11 17 23 2 12 16 24 2 12 15 24 2 12 14 25 1 13 14 26 0 13 14 26 0 13 14 26-1 13 13 26-1 13 12 26-2 13 11 25-3 13 11 24-4 12 10 23-5 11 9 21-5 11 8 20-6" fill="none"/>
+          <path class="sketch" d="M207 169l16-26h16l4 27M388 170l-10-28h-16l-5 28" fill="#77aaa0"/>
+        </g>
+
+        <!-- Sign -->
+        <g class="part" style="--delay:3s" filter="url(#wobble)">
+          <path class="sketch" d="M206 188h205v58H206Z" fill="#f4efe3"/>
+          <path class="sketch fine" d="M216 198h184v38H216Z" fill="none"/>
+          <text class="shop-title" x="309" y="224" text-anchor="middle">WORK GALLERY</text>
+        </g>
+
+        <!-- Lantern -->
+        <g class="part lantern" style="--delay:3.15s" filter="url(#wobble)">
+          <path class="sketch" d="M454 274v49" fill="none"/>
+          <path class="sketch" d="M439 289q15-9 30 0l-4 47q-11 8-23 0z" fill="#ef6b55"/>
+          <path class="sketch fine" d="M442 299h24M441 324h25" fill="none"/>
+          <circle cx="454" cy="312" r="5" fill="#f4efe3"/>
+        </g>
+
+        <!-- Plants -->
+        <g filter="url(#wobble)">
+          <path class="part sketch" style="--delay:3.2s" d="M116 538h59l-8 38h-43z" fill="#bd7654"/>
+          <path class="plant-leaf sketch" style="--delay:3.28s" d="M142 541q-30-35-7-56 19 32 10 57" fill="#77aa76"/>
+          <path class="plant-leaf sketch" style="--delay:3.4s" d="M145 541q4-48 34-48 0 34-31 49" fill="#9abd6c"/>
+          <path class="plant-leaf sketch" style="--delay:3.5s" d="M143 541q-6-58 16-67 14 39-13 68" fill="#4e8c70"/>
+
+          <path class="part sketch" style="--delay:3.35s" d="M449 542h53l-8 34h-37z" fill="#bd7654"/>
+          <path class="plant-leaf sketch" style="--delay:3.43s" d="M472 544q-29-26-8-47 17 23 11 47" fill="#77aa76"/>
+          <path class="plant-leaf sketch" style="--delay:3.55s" d="M476 544q2-42 27-42 2 30-25 43" fill="#4e8c70"/>
+        </g>
+
+        <!-- Small props -->
+        <g class="part" style="--delay:3.62s" filter="url(#wobble)">
+          <path class="sketch" d="M89 500h48v76H89Z" fill="#f4efe3"/>
+          <path class="sketch fine" d="M97 509h32v34H97ZM101 552h24M101 559h18" fill="none"/>
+          <path class="sketch" d="M505 522h34v54h-34z" fill="#f4efe3"/>
+          <path class="sketch fine" d="M511 533h22M511 541h22M511 549h14" fill="none"/>
+        </g>
+
+        <path class="steam" d="M290 442c-16-17 15-21 0-41s16-24 2-41"/>
+        <path class="steam" style="animation-delay:4.25s" d="M329 441c14-16-12-22 2-39s-12-23 1-38"/>
+      </svg>
+    </div>
+
+    <button class="enter-prompt" id="enterButton" type="button">
+      Enter the gallery <span aria-hidden="true">↘</span>
+    </button>
+    <button class="skip" id="skipButton" type="button">Skip intro</button>
+  </section>
+
+  <main class="site-shell" id="mainContent" tabindex="-1">
+    <nav class="nav" aria-label="Navegação principal">
+      <a class="brand" href="#top"><span class="brand__mark">WG</span> Work Gallery</a>
+      <div class="nav__links">
+        <a href="#work">Selected work</a>
+        <a href="#about">About</a>
+      </div>
+      <a class="contact-link" href="mailto:hello@example.com">Let's talk ↗</a>
+    </nav>
+
+    <section class="hero" id="top">
+      <p class="hero__eyebrow">Independent creative portfolio</p>
+      <div class="hero__orb" aria-hidden="true"></div>
+      <h1>Ideas made<br><em>visible.</em></h1>
+      <p class="hero__meta"><b></b><span>Available for selected projects — Brazil / Worldwide</span></p>
+    </section>
+
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee__track">
+        <span>Branding ✦ Digital experiences ✦ Creative direction ✦ Motion ✦ </span>
+        <span>Branding ✦ Digital experiences ✦ Creative direction ✦ Motion ✦ </span>
+      </div>
+    </div>
+
+    <section class="work" id="work">
+      <header class="section-head"><span>Selected projects</span><span>2024 — 2026</span></header>
+      <div class="projects">
+        <a class="project" href="#" aria-label="Ver projeto Northbound">
+          <div class="project__visual"><span class="project__number">01 / 03</span><span class="project__arrow">↗</span></div>
+          <div class="project__info"><h2>Northbound</h2><p>Brand identity<br>Art direction</p></div>
+        </a>
+        <a class="project" href="#" aria-label="Ver projeto Form &amp; Flow">
+          <div class="project__visual"><span class="project__number">02 / 03</span><span class="project__arrow">↗</span></div>
+          <div class="project__info"><h2>Form &amp; Flow</h2><p>Web design<br>Development</p></div>
+        </a>
+        <a class="project" href="#" aria-label="Ver projeto Common Ground">
+          <div class="project__visual"><span class="project__number">03 / 03</span><span class="project__arrow">↗</span></div>
+          <div class="project__info"><h2>Common Ground</h2><p>Campaign<br>Motion system</p></div>
+        </a>
+      </div>
+    </section>
+
+    <footer id="about">
+      <h2>Let’s make<br>something.</h2>
+      <a href="mailto:hello@example.com">hello@example.com ↗</a>
+    </footer>
+  </main>
+
+  <script>
+    const intro = document.querySelector('#intro');
+    const enterButton = document.querySelector('#enterButton');
+    const skipButton = document.querySelector('#skipButton');
+    let hasEntered = false;
+
+    function enterGallery() {
+      if (hasEntered) return;
+      hasEntered = true;
+      intro.classList.add('is-finished');
+      document.body.classList.add('ready');
+      window.setTimeout(() => {
+        intro.hidden = true;
+        document.querySelector('#mainContent').focus({ preventScroll: true });
+      }, 1000);
+    }
+
+    enterButton.addEventListener('click', enterGallery);
+    skipButton.addEventListener('click', enterGallery);
+    intro.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === 'Escape') enterGallery();
+    });
+
+    // Keep the cinematic pause, then reveal the call to action.
+    window.setTimeout(() => enterButton.focus(), 4700);
+  </script>
+</body>
+</html>
