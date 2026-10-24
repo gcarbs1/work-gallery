@@ -94,11 +94,29 @@
 
     .nav-links { display: flex; gap: clamp(18px, 3vw, 42px); }
     .nav-links a {
+      position: relative;
       color: var(--muted);
       font: 600 9px/1.2 ui-monospace, "SFMono-Regular", Menlo, monospace;
       letter-spacing: .11em;
       text-decoration: none;
       text-transform: uppercase;
+    }
+    .nav-links a::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      bottom: -7px;
+      left: 0;
+      height: 1px;
+      background: currentColor;
+      transform: scaleX(0);
+      transform-origin: right;
+      transition: transform .45s var(--ease);
+    }
+    .nav-links a:hover::after,
+    .nav-links a:focus-visible::after {
+      transform: scaleX(1);
+      transform-origin: left;
     }
     .nav-links a:hover, .nav-links a:focus-visible { color: var(--warm); }
 
@@ -215,6 +233,18 @@
       line-height: .98;
       letter-spacing: -.055em;
     }
+    .topic-rule {
+      width: fit-content;
+      max-width: 100%;
+    }
+    .topic-rule::after {
+      content: "";
+      display: block;
+      width: 100%;
+      height: 2px;
+      margin-top: 8px;
+      background: var(--warm);
+    }
     .about__copy p {
       max-width: 780px;
       margin: 42px 0 0;
@@ -233,13 +263,28 @@
       font-size: clamp(20px, 2vw, 28px);
       font-weight: 520;
     }
-    .timeline__heading span {
+    .timeline__title {
+      width: fit-content;
+    }
+    .timeline__title::after {
+      content: "";
+      display: block;
+      width: 100%;
+      height: 2px;
+      margin-top: 7px;
+      background: var(--warm);
+    }
+    .timeline__range {
       color: var(--muted);
       font: 500 9px/1 ui-monospace, "SFMono-Regular", Menlo, monospace;
       letter-spacing: .1em;
       text-transform: uppercase;
     }
-    .timeline__track { position: relative; display: grid; grid-template-columns: repeat(var(--items), 1fr); }
+    .timeline__track {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(var(--items), 1fr);
+    }
     .timeline__track::before {
       content: "";
       position: absolute;
@@ -249,8 +294,24 @@
       height: 1px;
       background: var(--line);
     }
+    .timeline__track::after {
+      content: "";
+      position: absolute;
+      z-index: 1;
+      top: 5px;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background-image: linear-gradient(90deg, transparent, var(--warm), transparent);
+      background-repeat: no-repeat;
+      background-size: 18% 100%;
+      background-position: -22% 0;
+      box-shadow: 0 0 12px rgba(217, 209, 196, .2);
+      animation: timeline-flow-x 7s linear infinite;
+    }
     .event {
       position: relative;
+      z-index: 2;
       min-height: 160px;
       padding: 38px clamp(26px, 4vw, 60px) 0 0;
     }
@@ -264,8 +325,10 @@
       height: 10px;
       border: 3px solid var(--bg);
       border-radius: 50%;
-      background: var(--warm);
+      background: var(--bg);
       box-shadow: 0 0 0 1px var(--warm);
+      animation: timeline-point 7s var(--ease) infinite;
+      animation-delay: var(--pulse-delay, 0s);
     }
     .event time {
       display: block;
@@ -275,8 +338,31 @@
       letter-spacing: .08em;
       text-transform: uppercase;
     }
-    .event h3 { margin: 0 0 7px; font-size: clamp(17px, 1.5vw, 21px); font-weight: 550; line-height: 1.35; }
-    .event p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+    .event h3 {
+      margin: 0 0 7px;
+      font-size: clamp(17px, 1.5vw, 21px);
+      font-weight: 550;
+      line-height: 1.35;
+    }
+    .event p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    @keyframes timeline-flow-x {
+      from { background-position: -22% 0; }
+      to { background-position: 122% 0; }
+    }
+    @keyframes timeline-flow-y {
+      from { background-position: 0 -22%; }
+      to { background-position: 0 122%; }
+    }
+    @keyframes timeline-point {
+      0%, 78%, 100% { box-shadow: 0 0 0 1px var(--warm); transform: scale(1); }
+      84% { box-shadow: 0 0 0 1px var(--warm), 0 0 0 5px rgba(217, 209, 196, .08), 0 0 16px rgba(217, 209, 196, .18); transform: scale(1.14); }
+      91% { box-shadow: 0 0 0 1px var(--warm); transform: scale(1); }
+    }
 
     .certifications { padding-block: clamp(110px, 14vw, 190px); }
     .certifications__title { margin: 0 0 clamp(46px, 6vw, 76px); }
@@ -382,6 +468,16 @@
       .timeline__heading { margin-bottom: 34px; }
       .timeline__track { grid-template-columns: 1fr; gap: 0; padding-left: 26px; }
       .timeline__track::before { top: 0; bottom: 0; left: 5px; width: 1px; height: 100%; }
+      .timeline__track::after {
+        top: 0;
+        left: 5px;
+        width: 1px;
+        height: 100%;
+        background-image: linear-gradient(180deg, transparent, var(--warm), transparent);
+        background-size: 100% 18%;
+        background-position: 0 -22%;
+        animation-name: timeline-flow-y;
+      }
       .event { min-height: 0; padding: 0 0 42px 12px; }
       .event + .event { padding-left: 12px; }
       .event::before { top: 0; left: -26px; }
@@ -393,6 +489,7 @@
     @media (prefers-reduced-motion: reduce) {
       .motion, .event { opacity: 1; transform: none; }
       .terrain-field { opacity: .72; }
+      .timeline__track::after, .event::before { animation: none; }
     }
   </style>
 </head>
@@ -436,21 +533,21 @@
           </div>
         </div>
         <div class="about__copy motion">
-          <h2>About</h2>
+          <h2 class="topic-rule">About</h2>
           <p>I am a data analyst at Red Bull Bragantino working across sports analysis, from data preparation and statistical modeling to the communication of results. I hold a degree in Statistics and Data Science from the University of São Paulo and am currently pursuing a master’s degree in Applied and Computational Mathematics at ICMC-USP.</p>
         </div>
       </div>
 
       <div class="timelines shell" id="timeline">
         <section class="timeline" style="--items: 2" aria-labelledby="education-title">
-          <h2 class="timeline__heading" id="education-title">Education <span>2023 — present</span></h2>
+          <h2 class="timeline__heading" id="education-title"><span class="timeline__title">Education</span><span class="timeline__range">2023 — present</span></h2>
           <div class="timeline__track">
-            <article class="event" style="--delay: 120ms">
+            <article class="event" style="--delay: 120ms; --pulse-delay: 0s">
               <time datetime="2023">2023 — 2026</time>
               <h3>BSc, Statistics and Data Science</h3>
               <p>University of São Paulo.</p>
             </article>
-            <article class="event" style="--delay: 260ms">
+            <article class="event" style="--delay: 260ms; --pulse-delay: -3.5s">
               <time datetime="2026">2026 — present</time>
               <h3>MSc, Applied and Computational Mathematics</h3>
               <p>ICMC-USP.</p>
@@ -459,19 +556,19 @@
         </section>
 
         <section class="timeline" style="--items: 3" aria-labelledby="experience-title">
-          <h2 class="timeline__heading" id="experience-title">Experience <span>2024 — present</span></h2>
+          <h2 class="timeline__heading" id="experience-title"><span class="timeline__title">Experience</span><span class="timeline__range">2024 — present</span></h2>
           <div class="timeline__track">
-            <article class="event" style="--delay: 120ms">
+            <article class="event" style="--delay: 120ms; --pulse-delay: 0s">
               <time datetime="2024-02">Feb — Oct 2024</time>
               <h3>Data Analyst Intern</h3>
               <p>Prometrics.club · Curitiba, Brazil.</p>
             </article>
-            <article class="event" style="--delay: 260ms">
+            <article class="event" style="--delay: 260ms; --pulse-delay: -2.33s">
               <time datetime="2024-11">Nov 2024 — Jun 2026</time>
               <h3>Data Intern</h3>
               <p>Red Bull Bragantino · Atibaia, Brazil.</p>
             </article>
-            <article class="event" style="--delay: 400ms">
+            <article class="event" style="--delay: 400ms; --pulse-delay: -4.66s">
               <time datetime="2026-07">Jul 2026 — present</time>
               <h3>Junior Data Analyst</h3>
               <p>Sports analysis, data preparation, modeling and visual communication at Red Bull Bragantino.</p>
@@ -484,7 +581,7 @@
 
     <section class="projects content-section shell" id="projects" aria-labelledby="projects-title">
       <div class="projects__head motion">
-        <h2 id="projects-title">Projects</h2>
+        <h2 class="topic-rule" id="projects-title">Projects</h2>
         <p>This area is reserved for complete case studies, each organized around its question, data, method and visual result.</p>
       </div>
       <div class="project-empty motion">
@@ -494,7 +591,7 @@
     </section>
 
     <section class="certifications content-section shell motion" aria-labelledby="certifications-title">
-      <h2 class="certifications__title" id="certifications-title">Certifications</h2>
+      <h2 class="certifications__title topic-rule" id="certifications-title">Certifications</h2>
       <div class="certifications__list">
         <div class="certification"><span>01</span><span>Introduction to Football Analytics</span></div>
         <div class="certification"><span>02</span><span>Football Analytics Hackathon 2025</span></div>
@@ -507,7 +604,7 @@
 
   <footer class="contact" id="contact">
     <div class="contact__inner shell motion">
-      <h2>Contact</h2>
+      <h2 class="topic-rule">Contact</h2>
       <p>For projects, research or data-related conversations, use any of the links below.</p>
       <div class="contact-buttons">
         <a class="contact-button" href="https://www.linkedin.com/in/gabriel-carbinatto/" target="_blank" rel="noreferrer">LinkedIn <span aria-hidden="true">↗</span></a>
@@ -806,6 +903,7 @@
       }, { rootMargin: '120px 0px', threshold: .01 }).observe(canvas);
       reducedMotion.addEventListener('change', restart);
     })();
+
   </script>
 
 </body>
