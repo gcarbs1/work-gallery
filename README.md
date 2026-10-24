@@ -1,9 +1,9 @@
 # Gabriel Carbinatto — Portfólio
 
-Portfólio estático, em inglês, para análise, ciência e visualização de dados. A interface usa fundo preto, tipografia bege e uma linguagem expositiva. A abertura atual é estritamente tipográfica.
+Portfólio estático, em inglês, para análise, ciência e visualização de dados. A interface usa fundo preto, tipografia bege e uma linguagem expositiva. A abertura combina tipografia com um terreno isométrico animado de placas retangulares.
 
 - As seções de perfil foram preenchidas a partir do currículo exportado do LinkedIn fornecido no projeto.
-- O experimento visual feito com Hairline e Anatomy foi retirado da página enquanto a direção da abertura é redefinida; as cópias locais auditadas permanecem no repositório para uso futuro.
+- O terreno da abertura adapta a curva de influência do `terrain` do Hairline e aplica os princípios de sólidos, sombreamento por faces e ordem de pintura do Anatomy.
 - Nenhum projeto profissional foi inventado; a área de cases permanece como placeholder.
 
 ## Executar localmente

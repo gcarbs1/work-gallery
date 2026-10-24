@@ -106,6 +106,16 @@
       border-bottom: 1px solid var(--line);
       background: var(--bg);
     }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 70px 0 0;
+      z-index: 1;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 34% 54%, rgba(0, 0, 0, .06), transparent 38%),
+        linear-gradient(to bottom, rgba(0, 0, 0, .12), transparent 22%, transparent 80%, rgba(0, 0, 0, .16));
+    }
     .hero__layout {
       position: relative;
       z-index: 2;
@@ -132,6 +142,19 @@
       hyphens: none;
     }
     .hero__separator { font-size: .65em; }
+    .hero__name-stage {
+      position: relative;
+      width: min(100%, 820px);
+    }
+    .terrain-field {
+      position: absolute;
+      inset: 70px 0 0;
+      z-index: 0;
+      width: 100%;
+      height: calc(100% - 70px);
+      pointer-events: none;
+      opacity: .9;
+    }
     .section-note {
       font: 600 9px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace;
       letter-spacing: .11em;
@@ -333,7 +356,13 @@
         padding-top: 116px;
         padding-bottom: 18px;
       }
+      .hero::after { inset: 64px 0 0; }
       .hero__eyebrow { max-width: 330px; gap: 8px 10px; line-height: 1.45; }
+      .terrain-field {
+        inset: 64px 0 0;
+        height: calc(100% - 64px);
+        opacity: .84;
+      }
       h1 { font-size: clamp(48px, 12.5vw, 62px); letter-spacing: -.075em; }
       .about { grid-template-columns: 1fr; align-items: start; }
       .portrait-shell { width: 210px; }
@@ -351,6 +380,7 @@
 
     @media (prefers-reduced-motion: reduce) {
       .motion, .event { opacity: 1; transform: none; }
+      .terrain-field { opacity: .72; }
     }
   </style>
 </head>
@@ -371,6 +401,7 @@
 
   <main id="content">
     <section class="hero" id="top" aria-labelledby="hero-title">
+      <canvas class="terrain-field" data-terrain-field aria-hidden="true"></canvas>
       <div class="hero__layout shell">
         <div class="hero__heading">
           <p class="hero__eyebrow">
@@ -378,7 +409,9 @@
             <span>Data science</span><span class="hero__separator" aria-hidden="true">•</span>
             <span>Data visualization</span>
           </p>
-          <h1 id="hero-title"><span>Gabriel</span><span>Carbinatto</span></h1>
+          <div class="hero__name-stage">
+            <h1 id="hero-title"><span>Gabriel</span><span>Carbinatto</span></h1>
+          </div>
         </div>
       </div>
     </section>
@@ -474,6 +507,201 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    (() => {
+      const canvas = document.querySelector('[data-terrain-field]');
+      const hero = canvas?.closest('.hero');
+      if (!canvas || !hero) return;
+
+      const context = canvas.getContext('2d');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const beige = getComputedStyle(document.documentElement).getPropertyValue('--beige').trim() || '#d9d1c4';
+      const beigeMatch = beige.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+      const beigeChannels = beigeMatch
+        ? beigeMatch.slice(1).map((channel) => Number.parseInt(channel, 16))
+        : [217, 209, 196];
+      let width = 0;
+      let height = 0;
+      let frame = 0;
+      let visible = true;
+      let last = 0;
+      let lastInteraction = -Infinity;
+      const pointer = { x: 0, y: 0, targetX: 0, targetY: 0, engaged: false };
+      const heights = new Map();
+
+      // Adapted from Hairline's terrain field: a compact falloff creates one
+      // clear local rise while the rest of the surface settles gradually.
+      const terrainFalloff = (value) => {
+        if (value <= 0) return 1;
+        if (value <= .417) return 1 - value / .417 * .6875;
+        if (value <= 1) return .3125 - (value - .417) / .583 * .2185;
+        return 0;
+      };
+
+      const tonePalette = Array.from({ length: 64 }, (_, index) => {
+        const amount = index / 63 * .24;
+        return `rgb(${beigeChannels.map((channel) => Math.round(channel * amount)).join(', ')})`;
+      });
+      const tone = (amount) => tonePalette[Math.max(0, Math.min(63, Math.round(amount / .24 * 63)))];
+
+      const settleHeight = (state, target, dt, seconds, calm) => {
+        if (calm) {
+          state.x = target;
+          state.v = 0;
+          return;
+        }
+        const steps = 4;
+        const step = dt / steps;
+        const frequency = 1 / seconds;
+        for (let index = 0; index < steps; index += 1) {
+          state.v += (frequency * frequency * (target - state.x) - 2 * frequency * state.v) * step;
+          state.x += state.v * step;
+        }
+      };
+
+      const polygon = (points, fillTone, strokeAlpha) => {
+        context.beginPath();
+        context.moveTo(points[0][0], points[0][1]);
+        for (let index = 1; index < points.length; index += 1) {
+          context.lineTo(points[index][0], points[index][1]);
+        }
+        context.closePath();
+        context.globalAlpha = 1;
+        context.fillStyle = fillTone;
+        context.fill();
+        context.globalAlpha = strokeAlpha;
+        context.strokeStyle = beige;
+        context.stroke();
+      };
+
+      const draw = (time = 0) => {
+        frame = 0;
+        context.clearRect(0, 0, width, height);
+
+        const dt = last ? Math.min((time - last) / 1000, 1 / 30) : 1 / 60;
+        last = time;
+        const compact = width < 620;
+        const stepX = compact ? 58 : 102;
+        const depthX = compact ? 11 : 19;
+        const depthY = compact ? 22 : 36;
+        const stepY = depthY + (compact ? 5 : 7);
+        const tileWidth = stepX - (compact ? 6 : 7);
+        const tileDepthX = depthX * .78;
+        const tileDepthY = depthY - (compact ? 2 : 3);
+        const rows = Math.ceil(height / stepY) + 5;
+        const columns = Math.ceil(width / stepX) + 6;
+        const seconds = time * .001;
+        const touring = !pointer.engaged && time - lastInteraction > 3600;
+        const targetX = touring ? width * (.5 + Math.sin(seconds * .24) * .3) : pointer.targetX;
+        const targetY = touring ? height * (.48 + Math.sin(seconds * .17 + 1.2) * .22) : pointer.targetY;
+        const follow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .24);
+        pointer.x += (targetX - pointer.x) * follow;
+        pointer.y += (targetY - pointer.y) * follow;
+
+        context.lineJoin = 'round';
+        context.lineWidth = compact ? .55 : .7;
+
+        for (let row = -3; row < rows; row += 1) {
+          const rowOffset = ((row * depthX) % stepX + stepX) % stepX;
+          for (let column = -3; column < columns; column += 1) {
+            const groundX = column * stepX + rowOffset - stepX * 1.5;
+            const groundY = row * stepY;
+            const centerX = groundX + (tileWidth + tileDepthX) * .5;
+            const centerY = groundY + tileDepthY * .5;
+            const distance = Math.hypot(centerX - pointer.x, centerY - pointer.y);
+            const reach = compact ? 150 : 250;
+            const rawRise = terrainFalloff(distance / reach);
+            const localRise = rawRise * rawRise * (3 - 2 * rawRise);
+            const ambient = reducedMotion.matches ? .45 : .5 + Math.sin(column * .27 + row * .23 - seconds * .38) * .5;
+            const u = (column + 3) / Math.max(1, columns - 1);
+            const v = (row + 3) / Math.max(1, rows - 1);
+            const relief = 5
+              + 10 * Math.exp(-((u - .23) ** 2 + (v - .72) ** 2) / .075)
+              + 7 * Math.exp(-((u - .8) ** 2 + (v - .3) ** 2) / .05);
+            const targetLift = relief + ambient * (compact ? 5 : 8) + localRise * (compact ? 34 : 54);
+            const key = `${row}:${column}`;
+            let heightState = heights.get(key);
+            if (!heightState) {
+              heightState = { x: targetLift, v: 0 };
+              heights.set(key, heightState);
+            }
+            settleHeight(heightState, targetLift, dt, compact ? .3 : .36, reducedMotion.matches);
+            const lift = heightState.x;
+
+            const baseA = [groundX, groundY];
+            const baseB = [groundX + tileWidth, groundY];
+            const baseC = [groundX + tileWidth + tileDepthX, groundY + tileDepthY];
+            const baseD = [groundX + tileDepthX, groundY + tileDepthY];
+            const topA = [baseA[0], baseA[1] - lift];
+            const topB = [baseB[0], baseB[1] - lift];
+            const topC = [baseC[0], baseC[1] - lift];
+            const topD = [baseD[0], baseD[1] - lift];
+            const light = .4 + localRise * .6;
+
+            // True solid faces, painted back-to-front inside each prism.
+            polygon([topB, topC, baseC, baseB], tone(.035 + light * .035), .1 + light * .1);
+            polygon([topD, topC, baseC, baseD], tone(.055 + light * .055), .12 + light * .11);
+            polygon([topA, topB, topC, topD], tone(.08 + light * .1), .15 + light * .14);
+          }
+        }
+
+        context.globalAlpha = 1;
+        if (visible && !reducedMotion.matches) frame = requestAnimationFrame(draw);
+      };
+
+      const resize = () => {
+        const bounds = canvas.getBoundingClientRect();
+        const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+        width = Math.max(1, bounds.width);
+        height = Math.max(1, bounds.height);
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        heights.clear();
+        if (!pointer.x && !pointer.y) {
+          pointer.x = pointer.targetX = width * .58;
+          pointer.y = pointer.targetY = height * .5;
+        }
+        last = 0;
+        draw(performance.now());
+      };
+
+      const restart = () => {
+        cancelAnimationFrame(frame);
+        frame = 0;
+        draw(performance.now());
+      };
+
+      const pointToCanvas = (event) => {
+        const bounds = canvas.getBoundingClientRect();
+        pointer.targetX = event.clientX - bounds.left;
+        pointer.targetY = event.clientY - bounds.top;
+        pointer.engaged = true;
+        lastInteraction = performance.now();
+        if (reducedMotion.matches) {
+          pointer.x = pointer.targetX;
+          pointer.y = pointer.targetY;
+          draw(lastInteraction);
+        } else if (!frame) {
+          frame = requestAnimationFrame(draw);
+        }
+      };
+
+      hero.addEventListener('pointermove', pointToCanvas, { passive: true });
+      hero.addEventListener('pointerleave', () => {
+        pointer.engaged = false;
+        lastInteraction = performance.now();
+      });
+
+      new ResizeObserver(resize).observe(canvas);
+      new IntersectionObserver((entries) => {
+        visible = entries[entries.length - 1].isIntersecting;
+        if (visible && !frame) restart();
+      }, { rootMargin: '120px 0px', threshold: .01 }).observe(canvas);
+      reducedMotion.addEventListener('change', restart);
+    })();
+  </script>
 
 </body>
 </html>
