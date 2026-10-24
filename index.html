@@ -649,6 +649,7 @@
         pressed: false,
         pressure: 0
       };
+      const impact = { x: 0, y: 0, at: -Infinity };
       const heights = new Map();
       const PHI = (1 + Math.sqrt(5)) / 2;
       const GOLDEN_ANGLE = Math.PI * 2 / (PHI * PHI);
@@ -673,7 +674,7 @@
         for (let index = 0; index < steps; index += 1) {
           // Slightly under-damped: a pressure change travels through the bed
           // instead of every column stopping at its target independently.
-          state.v += (frequency * frequency * (target - state.x) - 1.42 * frequency * state.v) * step;
+          state.v += (frequency * frequency * (target - state.x) - 1.16 * frequency * state.v) * step;
           state.x += state.v * step;
         }
       };
@@ -713,10 +714,10 @@
         const touring = !pointer.engaged && time - lastInteraction > 3600;
         const targetX = touring ? width * (.5 + Math.sin(seconds * .19) * .31) : pointer.targetX;
         const targetY = touring ? height * (.48 + Math.sin(seconds * .19 / PHI + GOLDEN_ANGLE) * .23) : pointer.targetY;
-        const follow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .17);
+        const follow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .14);
         pointer.x += (targetX - pointer.x) * follow;
         pointer.y += (targetY - pointer.y) * follow;
-        const pressureFollow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .11);
+        const pressureFollow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .075);
         pointer.pressure += ((pointer.pressed ? 1 : 0) - pointer.pressure) * pressureFollow;
         const measuredVelocityX = (pointer.x - pointer.previousX) / Math.max(dt, 1 / 240);
         const measuredVelocityY = (pointer.y - pointer.previousY) / Math.max(dt, 1 / 240);
@@ -786,16 +787,34 @@
             const waveB = Math.sin(distanceB * (compact ? .052 : .035) * PHI + seconds * .72 / PHI);
             const interference = waveA * .58 + waveB * .42;
 
-            const pressureWell = -core * (compact ? 15 : 23) * (1 + pointer.pressure * .9);
-            const circulatingCrest = spiralWave * circulation * (compact ? 22 : 35) * (1 + pointer.pressure * .35);
-            const pressureCollar = collar * (compact ? 13 : 21) * (.65 + pointer.pressure * .55);
-            const wakeLift = wakeWave * (compact ? 13 : 21);
-            const ambientLift = 9 + interference * (compact ? 3.8 : 6);
-            const interactionLift = pressureWell + circulatingCrest + pressureCollar + wakeLift;
+            const impactAge = seconds - impact.at;
+            const impactDistance = Math.hypot(centerX - impact.x, centerY - impact.y);
+            const shockSpeed = compact ? 230 : 380;
+            const shockWidth = compact ? 30 : 48;
+            const shockRadius = impactAge * shockSpeed;
+            const shockFront = Math.exp(-Math.pow((impactDistance - shockRadius) / shockWidth, 2));
+            const shockTail = Math.exp(-Math.pow((impactDistance - shockRadius + shockWidth * 1.35) / (shockWidth * 1.45), 2));
+            const impactCore = Math.exp(-Math.pow(impactDistance / (compact ? 50 : 78), 2));
+            const impactDecay = !reducedMotion.matches && impactAge >= 0 && impactAge < 2
+              ? Math.exp(-impactAge * 1.45)
+              : 0;
+            const shockAttack = 1 - Math.exp(-Math.max(0, impactAge) * 11);
+            const impactLift = (
+              shockFront * shockAttack * (compact ? 48 : 76)
+              - shockTail * (compact ? 12 : 19)
+              - impactCore * Math.exp(-Math.max(0, impactAge) * 4.8) * (compact ? 27 : 43)
+            ) * impactDecay;
+
+            const pressureWell = -core * (compact ? 28 : 44) * (1 + pointer.pressure * .95);
+            const circulatingCrest = spiralWave * circulation * (compact ? 34 : 56) * (1 + pointer.pressure * .55);
+            const pressureCollar = collar * (compact ? 20 : 32) * (.7 + pointer.pressure * .75);
+            const wakeLift = wakeWave * (compact ? 18 : 28);
+            const ambientLift = (compact ? 12 : 15) + interference * (compact ? 5 : 8);
+            const interactionLift = pressureWell + circulatingCrest + pressureCollar + wakeLift + impactLift;
             const targetLift = clamp(
               ambientLift + interactionLift,
               2,
-              compact ? 76 : 112
+              compact ? 105 : 155
             );
             const key = `${row}:${column}`;
             let heightState = heights.get(key);
@@ -803,13 +822,13 @@
               heightState = { x: targetLift, v: 0 };
               heights.set(key, heightState);
             }
-            settleHeight(heightState, targetLift, dt, compact ? .21 : .25, reducedMotion.matches);
-            const lift = heightState.x;
+            settleHeight(heightState, targetLift, dt, compact ? .17 : .21, reducedMotion.matches);
+            const lift = clamp(heightState.x, .75, compact ? 130 : 190);
 
             const tangentX = distance > 1 ? -relativeY / distance : 0;
             const tangentY = distance > 1 ? relativeX / distance : 0;
-            const flowShift = circulation * (compact ? 3.4 : 5.8) * (1 + pointer.pressure * .5);
-            const wakeShift = wakeEnvelope * flowSpeed * (compact ? 2.2 : 3.8);
+            const flowShift = circulation * (compact ? 4.6 : 7.8) * (1 + pointer.pressure * .65);
+            const wakeShift = wakeEnvelope * flowSpeed * (compact ? 3.2 : 5.4);
             const groundX = restingX + tangentX * flowShift - flowDirectionX * wakeShift;
             const groundY = restingY + tangentY * flowShift - flowDirectionY * wakeShift;
 
@@ -883,6 +902,9 @@
       hero.addEventListener('pointerdown', (event) => {
         pointToCanvas(event);
         pointer.pressed = true;
+        impact.x = pointer.targetX;
+        impact.y = pointer.targetY;
+        impact.at = performance.now() * .001;
       }, { passive: true });
       hero.addEventListener('pointerup', () => {
         pointer.pressed = false;
