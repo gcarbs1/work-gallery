@@ -7,6 +7,9 @@
   <meta name="theme-color" content="#000000">
   <title>Gabriel Carbinatto — Data Portfolio</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23000'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23d9d1c4'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
   <style>
     :root {
       color-scheme: dark;
@@ -125,13 +128,16 @@
       padding-top: 90px;
       padding-bottom: 38px;
     }
-    .hero__heading { width: 100%; }
+    .hero__heading {
+      width: 100%;
+      transform: translateY(clamp(-90px, -7vh, -52px));
+    }
     .hero__eyebrow {
       display: flex;
       flex-wrap: wrap;
       gap: 8px 12px;
       align-items: center;
-      margin: 0 0 clamp(24px, 3vw, 40px);
+      margin: 0 0 clamp(12px, 1.25vw, 18px);
       color: var(--warm);
       font-size: clamp(10px, .85vw, 13px);
       font-weight: 700;
@@ -164,13 +170,18 @@
     h1 {
       margin: 0;
       font-size: clamp(64px, 9.2vw, 140px);
-      font-family: "Arial Rounded MT Bold", "Arial Black", "Avenir Next", ui-sans-serif, sans-serif;
-      font-weight: 900;
-      line-height: .78;
-      letter-spacing: -.085em;
+      font-family: "Instrument Serif", "Iowan Old Style", Baskerville, Georgia, serif;
+      font-weight: 400;
+      line-height: .76;
+      letter-spacing: -.06em;
     }
     h1 span { display: block; }
-    h1 span:last-child { color: var(--warm); }
+    h1 span:last-child {
+      margin-left: .16em;
+      color: var(--warm);
+      font-style: italic;
+      letter-spacing: -.075em;
+    }
 
     .content-section { border-bottom: 1px solid var(--line); background: var(--bg); }
     .about {
@@ -363,7 +374,8 @@
         height: calc(100% - 64px);
         opacity: .84;
       }
-      h1 { font-size: clamp(48px, 12.5vw, 62px); letter-spacing: -.075em; }
+      h1 { font-size: clamp(52px, 13.5vw, 66px); }
+      h1 span:last-child { margin-left: .11em; }
       .about { grid-template-columns: 1fr; align-items: start; }
       .portrait-shell { width: 210px; }
       .about__copy p { margin-top: 30px; }
@@ -527,7 +539,15 @@
       let visible = true;
       let last = 0;
       let lastInteraction = -Infinity;
-      const pointer = { x: 0, y: 0, targetX: 0, targetY: 0, engaged: false };
+      const pointer = {
+        x: 0,
+        y: 0,
+        targetX: 0,
+        targetY: 0,
+        engaged: false,
+        pressed: false,
+        pressure: 0
+      };
       const heights = new Map();
 
       // Adapted from Hairline's terrain field: a compact falloff creates one
@@ -595,9 +615,11 @@
         const touring = !pointer.engaged && time - lastInteraction > 3600;
         const targetX = touring ? width * (.5 + Math.sin(seconds * .24) * .3) : pointer.targetX;
         const targetY = touring ? height * (.48 + Math.sin(seconds * .17 + 1.2) * .22) : pointer.targetY;
-        const follow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .24);
+        const follow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .17);
         pointer.x += (targetX - pointer.x) * follow;
         pointer.y += (targetY - pointer.y) * follow;
+        const pressureFollow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .11);
+        pointer.pressure += ((pointer.pressed ? 1 : 0) - pointer.pressure) * pressureFollow;
 
         context.lineJoin = 'round';
         context.lineWidth = compact ? .55 : .7;
@@ -611,22 +633,28 @@
             const centerY = groundY + tileDepthY * .5;
             const distance = Math.hypot(centerX - pointer.x, centerY - pointer.y);
             const reach = compact ? 150 : 250;
-            const rawRise = terrainFalloff(distance / reach);
+            const distanceRatio = distance / reach;
+            const rawRise = terrainFalloff(distanceRatio);
             const localRise = rawRise * rawRise * (3 - 2 * rawRise);
+            const pressedCenter = Math.exp(-Math.pow(distanceRatio / .32, 2));
+            const pressedRidge = Math.exp(-Math.pow((distanceRatio - .55) / .2, 2));
             const ambient = reducedMotion.matches ? .45 : .5 + Math.sin(column * .27 + row * .23 - seconds * .38) * .5;
             const u = (column + 3) / Math.max(1, columns - 1);
             const v = (row + 3) / Math.max(1, rows - 1);
             const relief = 5
               + 10 * Math.exp(-((u - .23) ** 2 + (v - .72) ** 2) / .075)
               + 7 * Math.exp(-((u - .8) ** 2 + (v - .3) ** 2) / .05);
-            const targetLift = relief + ambient * (compact ? 5 : 8) + localRise * (compact ? 34 : 54);
+            const hoverLift = localRise * (compact ? 38 : 60);
+            const pressedLift = pressedRidge * (compact ? 54 : 84) - pressedCenter * (compact ? 25 : 38);
+            const interactionLift = hoverLift + (pressedLift - hoverLift) * pointer.pressure;
+            const targetLift = Math.max(2, relief + ambient * (compact ? 5 : 8) + interactionLift);
             const key = `${row}:${column}`;
             let heightState = heights.get(key);
             if (!heightState) {
               heightState = { x: targetLift, v: 0 };
               heights.set(key, heightState);
             }
-            settleHeight(heightState, targetLift, dt, compact ? .3 : .36, reducedMotion.matches);
+            settleHeight(heightState, targetLift, dt, compact ? .24 : .28, reducedMotion.matches);
             const lift = heightState.x;
 
             const baseA = [groundX, groundY];
@@ -637,7 +665,8 @@
             const topB = [baseB[0], baseB[1] - lift];
             const topC = [baseC[0], baseC[1] - lift];
             const topD = [baseD[0], baseD[1] - lift];
-            const light = .4 + localRise * .6;
+            const responseLight = Math.max(localRise * (1 - pointer.pressure), pressedRidge * pointer.pressure);
+            const light = .4 + responseLight * .6;
 
             // True solid faces, painted back-to-front inside each prism.
             polygon([topB, topC, baseC, baseB], tone(.035 + light * .035), .1 + light * .1);
@@ -689,8 +718,19 @@
       };
 
       hero.addEventListener('pointermove', pointToCanvas, { passive: true });
+      hero.addEventListener('pointerdown', (event) => {
+        pointToCanvas(event);
+        pointer.pressed = true;
+      }, { passive: true });
+      hero.addEventListener('pointerup', () => {
+        pointer.pressed = false;
+      }, { passive: true });
+      hero.addEventListener('pointercancel', () => {
+        pointer.pressed = false;
+      }, { passive: true });
       hero.addEventListener('pointerleave', () => {
         pointer.engaged = false;
+        pointer.pressed = false;
         lastInteraction = performance.now();
       });
 
