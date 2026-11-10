@@ -383,24 +383,82 @@ h2 {
 
 /* 8. Projetos */
 .projects { padding-block: clamp(110px, 14vw, 190px); }
-.projects__head {
-  display: grid;
-  grid-template-columns: .65fr 1.35fr;
-  gap: 40px;
-  align-items: end;
-  margin-bottom: clamp(56px, 7vw, 92px);
-}
-.projects__head p { max-width: 620px; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.7; }
-.project-empty {
+.projects__head { margin-bottom: clamp(56px, 7vw, 92px); }
+.project-groups { border-top: 1px solid var(--line); }
+.project-group { border-bottom: 1px solid var(--line); }
+.project-group__heading {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 24px;
   align-items: center;
-  min-height: 112px;
-  border-block: 1px solid var(--line);
+  min-height: 86px;
 }
-.project-empty strong { font-size: clamp(19px, 2vw, 28px); font-weight: 470; letter-spacing: -.025em; }
+.project-group__heading h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.2vw, 34px);
+  font-weight: 700;
+  letter-spacing: -.03em;
+}
 .section-note { color: var(--muted); }
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(28px, 4vw, 58px);
+  padding: 0 0 clamp(48px, 6vw, 82px);
+}
+.project-card {
+  display: block;
+  color: var(--text);
+  text-decoration: none;
+}
+.project-card__media {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--line);
+  background: #e5e8e6;
+}
+.project-card__media::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid transparent;
+  content: "";
+  pointer-events: none;
+  transition: border-color .45s var(--ease);
+}
+.project-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .7s var(--ease), filter .7s var(--ease);
+}
+.project-card__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: baseline;
+  padding-top: 18px;
+}
+.project-card__body strong {
+  font-size: clamp(19px, 1.8vw, 27px);
+  font-weight: 520;
+  line-height: 1.2;
+  letter-spacing: -.025em;
+}
+.project-card__tools {
+  color: var(--muted);
+  font: 600 9px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.project-card:hover .project-card__media img,
+.project-card:focus-visible .project-card__media img { transform: scale(1.025); filter: contrast(1.04); }
+.project-card:hover .project-card__media::after,
+.project-card:focus-visible .project-card__media::after { border-color: var(--warm); }
+.project-card:focus-visible { outline: 2px solid var(--warm); outline-offset: 8px; }
 
 /* 9. Contato e rodapé */
 .contact { padding-block: clamp(110px, 14vw, 190px) 52px; background: var(--bg); }
@@ -444,7 +502,7 @@ h2 {
 
 @media (max-width: 980px) {
   .about { grid-template-columns: 220px 1fr; gap: 54px; }
-  .projects__head { grid-template-columns: 1fr; }
+  .project-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
@@ -483,7 +541,9 @@ h2 {
   .event { min-height: 0; padding: 0 0 42px 12px; }
   .event + .event { padding-left: 12px; }
   .event::before { top: 0; left: -26px; }
-  .project-empty { grid-template-columns: 1fr; gap: 10px; padding-block: 28px; }
+  .project-group__heading { min-height: 76px; }
+  .project-card__body { grid-template-columns: 1fr; gap: 9px; }
+  .project-card__tools { white-space: normal; }
   .contact__foot { flex-direction: column; }
   .contact-button { width: 100%; }
 }
