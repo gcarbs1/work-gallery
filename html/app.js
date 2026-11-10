@@ -2,11 +2,12 @@
 
    1. RELEVO   – soma de poucas "montanhas" gaussianas, amplas e suaves, que se
                  deslocam e respiram devagar.
-   2. CURVAS   – marching squares transforma o relevo em curvas de nível; cada
-                 curva fica na sua altura, então os picos aparecem em volume.
+   2. CURVAS   – marching squares transforma o relevo em curvas de nível a cada
+                 quadro; cada curva fica na sua altura, então os picos têm volume.
    3. CÂMERA   – vista inclinada; o ponteiro gira a câmera de leve (paralaxe).
    4. LEITURA  – a curva de nível que está sob o ponteiro se acende inteira.
    5. NOME     – a área do nome e das áreas de atuação fica vazia, com borda suave.
+   6. ENTRADA  – ao abrir, o relevo sobe do plano.
 
    Desenhado em <canvas data-terrain-field>; pausa fora da tela e respeita
    prefers-reduced-motion (sem movimento automático).                          */
@@ -22,15 +23,16 @@
   const CONFIG = {
     cell: 10,            // célula da grade (px do plano); menor = curvas mais lisas
     cellCompact: 8,
-    levels: 34,          // número de curvas de nível
-    levelsCompact: 26,
-    indexEvery: 6,       // a cada N curvas, uma mais grossa (como em mapas)
-    relief: .3,          // altura do pico mais alto (fração da altura da tela)
+    levels: 20,          // número de curvas de nível
+    levelsCompact: 16,
+    indexEvery: 5,       // a cada N curvas, uma mais grossa (como em mapas)
+    relief: .4,          // altura do pico mais alto (fração da altura da tela)
     tilt: 56,            // inclinação da câmera (graus; 0 = vista de cima)
     perspective: 2400,   // distância da câmera (px); menor = perspectiva mais forte
-    yawRange: 9,         // quanto o ponteiro gira a câmera para os lados (graus)
-    tiltRange: 4,        // quanto o ponteiro inclina a câmera (graus)
-    breathe: .05,        // velocidade com que as montanhas se movem
+    yawRange: 14,        // quanto o ponteiro gira a câmera para os lados (graus)
+    tiltRange: 6,        // quanto o ponteiro inclina a câmera (graus)
+    breathe: .08,        // velocidade com que as montanhas se movem
+    intro: 2.2,          // duração da entrada: o relevo sobe do plano (s)
     clearPad: 34,        // folga em volta do texto que fica vazia (px)
     clearFeather: 46     // suavidade da borda da área vazia (px)
   };
@@ -53,8 +55,9 @@
     .slice(1).map((c) => Number.parseInt(c, 16)).join(', ');
   const ink = (alpha) => `rgba(${creamRGB}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
-  // Tela, câmera e grade
+  // Tela e câmera
   let width = 1;
   let height = 1;
   let compact = false;
@@ -92,12 +95,15 @@
     return [xr * camera.cosY + yr * camera.sinY, -xr * camera.sinY + yr * camera.cosY];
   }
 
+  // Grade do relevo e memória das curvas (reaproveitada a cada quadro)
   let nx = 2;
   let ny = 2;
   let cell = CONFIG.cell;
   let halfX = 1;
   let halfY = 1;
   let values = new Float32Array(4);
+  let buffers = [];
+  let counts = new Int32Array(1);
 
   function makeGrid() {
     cell = compact ? CONFIG.cellCompact : CONFIG.cell;
@@ -106,35 +112,41 @@
     nx = Math.ceil(2 * halfX / cell) + 1;
     ny = Math.ceil(2 * halfY / cell) + 1;
     values = new Float32Array(nx * ny);
+    buffers = Array.from({ length: levels }, () => new Float32Array(4096));
+    counts = new Int32Array(levels);
   }
 
   // Relevo: as montanhas se deslocam e respiram devagar
-  const hillsNow = HILLS.map((h) => ({ ...h }));
+  const hillsNow = HILLS.map(() => ({}));
   function updateRelief(seconds) {
     const t = seconds * CONFIG.breathe;
     HILLS.forEach((h, k) => {
       const now = hillsNow[k];
-      now.x = (h.u + Math.sin(t * (1 + k * .23) + k * 1.9) * .05) * halfX;
-      now.y = (h.v + Math.cos(t * (.8 + k * .17) + k * 2.7) * .06) * halfY;
-      now.w = h.w * (.85 + .15 * Math.sin(t * (1.3 + k * .11) + k));
+      const turn = h.a + t * .3 * (k % 2 ? 1 : -1);
+      now.x = (h.u + Math.sin(t * (1 + k * .23) + k * 1.9) * .08) * halfX;
+      now.y = (h.v + Math.cos(t * (.8 + k * .17) + k * 2.7) * .09) * halfY;
+      now.w = h.w * (.8 + .2 * Math.sin(t * (1.3 + k * .11) + k));
       now.ix = 1 / (h.sx * halfX * (1 + .08 * Math.sin(t + k)));
       now.iy = 1 / (h.sy * halfY);
-      now.cosA = Math.cos(h.a + t * .3 * (k % 2 ? 1 : -1));
-      now.sinA = Math.sin(h.a + t * .3 * (k % 2 ? 1 : -1));
+      now.cosA = Math.cos(turn);
+      now.sinA = Math.sin(turn);
     });
     for (let j = 0; j < ny; j += 1) {
       const y = -halfY + j * cell;
+      const row = j * nx;
       for (let i = 0; i < nx; i += 1) {
         const x = -halfX + i * cell;
         let v = 0;
-        for (const h of hillsNow) {
+        for (let k = 0; k < hillsNow.length; k += 1) {
+          const h = hillsNow[k];
           const dx = x - h.x;
           const dy = y - h.y;
           const a = (dx * h.cosA + dy * h.sinA) * h.ix;
           const b = (-dx * h.sinA + dy * h.cosA) * h.iy;
-          v += h.w * Math.exp(-.5 * (a * a + b * b));
+          const r2 = a * a + b * b;
+          if (r2 < 40) v += h.w * Math.exp(-.5 * r2);
         }
-        values[j * nx + i] = 1 - Math.exp(-1.6 * v);
+        values[row + i] = 1 - Math.exp(-1.6 * v);
       }
     }
   }
@@ -153,43 +165,58 @@
     return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
   }
 
-  // Curvas de nível (marching squares), guardadas em coordenadas do plano por nível.
+  // Curvas de nível (marching squares). Cada célula só testa as curvas que passam por ela.
   // Arestas: 0 = topo (a–b), 1 = direita (b–c), 2 = base (d–c), 3 = esquerda (a–d)
   const CASES = [[], [3, 0], [0, 1], [3, 1], [1, 2], [3, 0, 1, 2], [0, 2], [3, 2],
     [2, 3], [0, 2], [0, 1, 2, 3], [1, 2], [1, 3], [0, 1], [3, 0], []];
-  let segments = [];
 
-  function edge(list, e, i, j, t, a, b, c, d) {
+  function push(k, x, y) {
+    let buffer = buffers[k];
+    if (counts[k] + 2 > buffer.length) {
+      const bigger = new Float32Array(buffer.length * 2);
+      bigger.set(buffer);
+      buffers[k] = buffer = bigger;
+    }
+    buffer[counts[k]] = x;
+    buffer[counts[k] + 1] = y;
+    counts[k] += 2;
+  }
+
+  function edge(k, e, i, j, t, a, b, c, d) {
     let gx = i;
     let gy = j;
     if (e === 0) gx = i + (t - a) / (b - a);
     else if (e === 1) { gx = i + 1; gy = j + (t - b) / (c - b); }
     else if (e === 2) { gx = i + (t - d) / (c - d); gy = j + 1; }
     else gy = j + (t - a) / (d - a);
-    list.push(-halfX + gx * cell, -halfY + gy * cell);
+    push(k, -halfX + gx * cell, -halfY + gy * cell);
   }
 
   function traceContours() {
-    segments = [];
-    for (let k = 0; k < levels; k += 1) {
-      const t = (k + 1) / (levels + 1);
-      const list = [];
-      for (let j = 0; j < ny - 1; j += 1) {
-        for (let i = 0; i < nx - 1; i += 1) {
-          const a = values[j * nx + i];
-          const b = values[j * nx + i + 1];
-          const c = values[(j + 1) * nx + i + 1];
-          const d = values[(j + 1) * nx + i];
+    counts.fill(0);
+    const steps = levels + 1;
+    for (let j = 0; j < ny - 1; j += 1) {
+      for (let i = 0; i < nx - 1; i += 1) {
+        const a = values[j * nx + i];
+        const b = values[j * nx + i + 1];
+        const c = values[(j + 1) * nx + i + 1];
+        const d = values[(j + 1) * nx + i];
+        const low = Math.min(a, b, c, d);
+        const high = Math.max(a, b, c, d);
+        // curva k tem altura (k + 1) / steps; só as que ficam entre low e high cruzam a célula
+        const kLow = Math.max(0, Math.ceil(low * steps) - 1);
+        const kHigh = Math.min(levels - 1, Math.ceil(high * steps) - 2);
+        for (let k = kLow; k <= kHigh; k += 1) {
+          const t = (k + 1) / steps;
           const code = (a > t ? 1 : 0) | (b > t ? 2 : 0) | (c > t ? 4 : 0) | (d > t ? 8 : 0);
           if (code === 0 || code === 15) continue;
           const pairs = CASES[code];
           for (let p = 0; p < pairs.length; p += 2) {
-            edge(list, pairs[p], i, j, t, a, b, c, d);
-            edge(list, pairs[p + 1], i, j, t, a, b, c, d);
+            edge(k, pairs[p], i, j, t, a, b, c, d);
+            edge(k, pairs[p + 1], i, j, t, a, b, c, d);
           }
         }
       }
-      segments.push(list);
     }
   }
 
@@ -233,46 +260,52 @@
   // Ponteiro: gira a câmera e escolhe a curva que se acende
   const pointer = { sx: 0, sy: 0, inside: false, amount: 0, level: -1 };
   let glow = new Float32Array(CONFIG.levels);
+  let intro = 1;
 
   // Desenho de um quadro
   function render() {
     context.clearRect(0, 0, width, height);
     context.lineCap = 'round';
     context.lineJoin = 'round';
+    const rise = easeOut(intro);
 
-    for (let k = 0; k < segments.length; k += 1) {
-      const list = segments[k];
-      if (!list.length) continue;
+    for (let k = 0; k < levels; k += 1) {
+      const count = counts[k];
+      if (!count) continue;
+      const list = buffers[k];
       const share = (k + 1) / (levels + 1);
       const index = k % CONFIG.indexEvery === CONFIG.indexEvery - 1;
-      const base = .05 + .3 * share + (index ? .07 : 0);
-      const z = share * relief;
+      const base = (.14 + .55 * share + (index ? .12 : 0)) * (.35 + .65 * rise);
+      const z = share * relief * rise;
 
       context.beginPath();
-      for (let n = 0; n < list.length; n += 4) {
+      for (let n = 0; n < count; n += 4) {
         project(list[n], list[n + 1], z);
         context.moveTo(out[0], out[1]);
         project(list[n + 2], list[n + 3], z);
         context.lineTo(out[0], out[1]);
       }
-      // Linhas ao fundo (topo da tela) mais apagadas: dá profundidade
-      const fadeStyle = context.createLinearGradient(0, 0, 0, height);
-      fadeStyle.addColorStop(0, ink(base * .35));
-      fadeStyle.addColorStop(.45, ink(base * .85));
-      fadeStyle.addColorStop(1, ink(base));
-      context.strokeStyle = fadeStyle;
-      context.lineWidth = index ? (compact ? .95 : 1.15) : (compact ? .5 : .62);
+      // linhas ao fundo (topo da tela) mais apagadas: dá profundidade
+      const depth = context.createLinearGradient(0, 0, 0, height);
+      depth.addColorStop(0, ink(base * .5));
+      depth.addColorStop(.45, ink(base * .9));
+      depth.addColorStop(1, ink(base));
+      context.strokeStyle = depth;
+      context.lineWidth = index ? (compact ? 1.6 : 2) : (compact ? .85 : 1.1);
       context.stroke();
 
-      // A curva sob o ponteiro se acende (com transição suave entre curvas)
+      // a curva sob o ponteiro se acende, com um halo suave
       if (glow[k] > .01) {
-        context.strokeStyle = ink(.85 * glow[k]);
-        context.lineWidth = compact ? 1.1 : 1.35;
+        context.strokeStyle = ink(.16 * glow[k]);
+        context.lineWidth = compact ? 6 : 9;
+        context.stroke();
+        context.strokeStyle = ink(glow[k]);
+        context.lineWidth = compact ? 1.8 : 2.4;
         context.stroke();
       }
     }
 
-    // Esvazia a área do texto
+    // esvazia a área do texto
     if (clearMask) {
       context.save();
       context.setTransform(1, 0, 0, 1, 0, 0);
@@ -287,7 +320,6 @@
   let running = false;
   let last = 0;
   let clock = 0;
-  let sinceRelief = Infinity;
 
   function updatePointer(dt) {
     pointer.amount += ((pointer.inside ? 1 : 0) - pointer.amount) * (1 - Math.exp(-dt / .5));
@@ -299,13 +331,12 @@
     camera.tilt += (targetTilt - camera.tilt) * follow;
     setCamera(camera.yaw, camera.tilt);
 
-    // Qual curva está sob o ponteiro
+    // qual curva está sob o ponteiro
     pointer.level = -1;
     if (pointer.inside) {
       const ground = unproject(pointer.sx, pointer.sy);
       if (ground && Math.abs(ground[0]) < halfX && Math.abs(ground[1]) < halfY) {
-        const value = sample(ground[0], ground[1]);
-        const k = Math.round(value * (levels + 1)) - 1;
+        const k = Math.round(sample(ground[0], ground[1]) * (levels + 1)) - 1;
         if (k >= 0 && k < levels) pointer.level = k;
       }
     }
@@ -317,16 +348,14 @@
   }
 
   function frame(now) {
-    const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 1 / 60;
+    // passo de tempo real (limitado), para o movimento não "pular" se um quadro atrasar
+    const dt = last ? Math.min((now - last) / 1000, 1 / 30) : 1 / 60;
     last = now;
     clock += dt;
-    // As montanhas mudam devagar: recalcular ~15 vezes por segundo é suficiente
-    sinceRelief += dt;
-    if (sinceRelief > 1 / 15) {
-      sinceRelief = 0;
-      updateRelief(clock);
-      traceContours();
-    }
+    intro = Math.min(1, intro + dt / CONFIG.intro);
+    // o relevo é recalculado a cada quadro: as formas mudam de forma contínua
+    updateRelief(clock);
+    traceContours();
     updatePointer(dt);
     render();
     if (visible && !reducedMotion.matches) {
@@ -337,7 +366,7 @@
   }
 
   function drawStill() {
-    setCamera(0, 0);
+    setCamera(camera.yaw, camera.tilt);
     updateRelief(clock);
     traceContours();
     render();
@@ -345,6 +374,7 @@
 
   function start() {
     if (reducedMotion.matches) {
+      intro = 1;
       drawStill();
       return;
     }
@@ -368,10 +398,8 @@
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     camera.cx = width / 2;
     camera.cy = height * .56;
-    setCamera(camera.yaw, camera.tilt);
     makeGrid();
     measureClearArea();
-    sinceRelief = Infinity;
     drawStill();
   }
 
@@ -406,12 +434,13 @@
     running = false;
     start();
   });
-  // A fonte do nome muda a largura do texto: mede a área vazia de novo quando ela carregar
+  // a fonte do nome muda a largura do texto: mede a área vazia de novo quando ela carregar
   document.fonts?.ready.then(() => {
     measureClearArea();
     if (reducedMotion.matches) drawStill();
   });
 
+  if (!reducedMotion.matches) intro = 0;
   resize();
   start();
 })();
