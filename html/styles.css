@@ -12,6 +12,7 @@
   --pad: clamp(22px, 5vw, 76px);
   --max: 1500px;
   --ease: cubic-bezier(.22, 1, .36, 1);
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -180,17 +181,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
 h1 {
   margin: 0;
   font-size: clamp(64px, 9.2vw, 140px);
-  font-family: "Instrument Serif", "Iowan Old Style", Baskerville, Georgia, serif;
-  font-weight: 400;
-  line-height: .76;
-  letter-spacing: -.06em;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 760;
+  line-height: .84;
+  letter-spacing: -.055em;
 }
 h1 span { display: block; }
 h1 span:last-child {
   margin-left: .16em;
   color: var(--warm);
-  font-style: italic;
-  letter-spacing: -.075em;
 }
 
 /* 5. Sobre */
@@ -221,10 +221,12 @@ h1 span:last-child {
 
 h2 {
   margin: 0;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
   font-size: clamp(42px, 5.5vw, 82px);
-  font-weight: 460;
+  font-weight: 700;
   line-height: .98;
-  letter-spacing: -.055em;
+  letter-spacing: -.045em;
 }
 .topic-rule {
   width: fit-content;
@@ -255,7 +257,8 @@ h2 {
   align-items: baseline;
   margin: 0 0 28px;
   font-size: clamp(20px, 2vw, 28px);
-  font-weight: 520;
+  font-weight: 700;
+  letter-spacing: -.02em;
 }
 .timeline__title {
   width: fit-content;
