@@ -1,389 +1,417 @@
-// Fundo animado do hero: um piso de tijolos que reage ao ponteiro.
-// Atrás do nome e das áreas (Data analysis, Data science, Data visualization)
-// os tijolos se quebram, abrindo um vão de bordas irregulares para o texto.
-// Desenhado em <canvas data-terrain-field> e pausado fora da tela
-// ou com prefers-reduced-motion.
+/* Fundo animado do hero: um relevo de densidade desenhado só com curvas de nível.
+
+   1. RELEVO   – soma de poucas "montanhas" gaussianas, amplas e suaves, que se
+                 deslocam e respiram devagar.
+   2. CURVAS   – marching squares transforma o relevo em curvas de nível; cada
+                 curva fica na sua altura, então os picos aparecem em volume.
+   3. CÂMERA   – vista inclinada; o ponteiro gira a câmera de leve (paralaxe).
+   4. LEITURA  – a curva de nível que está sob o ponteiro se acende inteira.
+   5. NOME     – a área do nome e das áreas de atuação fica vazia, com borda suave.
+
+   Desenhado em <canvas data-terrain-field>; pausa fora da tela e respeita
+   prefers-reduced-motion (sem movimento automático).                          */
 (() => {
+  'use strict';
+
   const canvas = document.querySelector('[data-terrain-field]');
   const hero = canvas?.closest('.hero');
-  if (!canvas || !hero) return;
+  const context = canvas?.getContext('2d');
+  if (!canvas || !hero || !context) return;
 
-  const context = canvas.getContext('2d');
+  // Ajustes
+  const CONFIG = {
+    cell: 10,            // célula da grade (px do plano); menor = curvas mais lisas
+    cellCompact: 8,
+    levels: 34,          // número de curvas de nível
+    levelsCompact: 26,
+    indexEvery: 6,       // a cada N curvas, uma mais grossa (como em mapas)
+    relief: .3,          // altura do pico mais alto (fração da altura da tela)
+    tilt: 56,            // inclinação da câmera (graus; 0 = vista de cima)
+    perspective: 2400,   // distância da câmera (px); menor = perspectiva mais forte
+    yawRange: 9,         // quanto o ponteiro gira a câmera para os lados (graus)
+    tiltRange: 4,        // quanto o ponteiro inclina a câmera (graus)
+    breathe: .05,        // velocidade com que as montanhas se movem
+    clearPad: 34,        // folga em volta do texto que fica vazia (px)
+    clearFeather: 46     // suavidade da borda da área vazia (px)
+  };
+
+  // Montanhas: posição (u, v em −1…1 do plano), tamanho, peso e giro da elipse
+  const HILLS = [
+    { u: .36, v: -.02, sx: .2, sy: .26, w: 1, a: .4 },
+    { u: .66, v: .34, sx: .13, sy: .17, w: .72, a: -.3 },
+    { u: .1, v: .52, sx: .18, sy: .14, w: .58, a: .9 },
+    { u: -.48, v: .56, sx: .24, sy: .18, w: .5, a: .2 },
+    { u: .82, v: -.38, sx: .17, sy: .2, w: .52, a: -.8 },
+    { u: -.15, v: -.48, sx: .3, sy: .2, w: .42, a: .5 },
+    { u: -.74, v: -.06, sx: .16, sy: .22, w: .38, a: 1.2 }
+  ];
+
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const rootStyle = getComputedStyle(document.documentElement);
-  const beige = rootStyle.getPropertyValue('--beige').trim() || '#d9d1c4';
-  const cream = rootStyle.getPropertyValue('--cream').trim() || '#f0e6cc'; // off-white das linhas
-  const beigeMatch = beige.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
-  const beigeChannels = beigeMatch
-    ? beigeMatch.slice(1).map((channel) => Number.parseInt(channel, 16))
-    : [217, 209, 196];
-  let width = 0;
-  let height = 0;
-  let frame = 0;
-  let visible = true;
-  let last = 0;
-  let lastInteraction = -Infinity;
-  const pointer = {
-    x: 0,
-    y: 0,
-    targetX: 0,
-    targetY: 0,
-    previousX: 0,
-    previousY: 0,
-    velocityX: 0,
-    velocityY: 0,
-    engaged: false,
-    pressed: false,
-    pressure: 0
-  };
-  const impact = { x: 0, y: 0, at: -Infinity };
-  const heights = new Map();
-  const PHI = (1 + Math.sqrt(5)) / 2;
-  const GOLDEN_ANGLE = Math.PI * 2 / (PHI * PHI);
-  const GOLDEN_PITCH = 2 * Math.log(PHI) / Math.PI;
-  const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
-  const smooth = (edge0, edge1, value) => {
-    const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
-    return t * t * (3 - 2 * t);
-  };
-  // Número pseudoaleatório fixo por tijolo (0–1): variação de tom e borda irregular da quebra
-  const hash = (a, b) => {
-    let h = Math.imul(a, 374761393) + Math.imul(b, 668265263);
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-  };
+  const cream = rootStyle.getPropertyValue('--cream').trim() || '#f0e6cc';
+  const creamRGB = (cream.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i) || [0, 'f0', 'e6', 'cc'])
+    .slice(1).map((c) => Number.parseInt(c, 16)).join(', ');
+  const ink = (alpha) => `rgba(${creamRGB}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  // Área do texto (em px do canvas) onde os tijolos se quebram
-  let breaks = [];
-  const measureBreaks = () => {
+  // Tela, câmera e grade
+  let width = 1;
+  let height = 1;
+  let compact = false;
+  let levels = CONFIG.levels;
+  let relief = 100;
+  const camera = { cosT: 1, sinT: 0, cosY: 1, sinY: 0, cx: 0, cy: 0, yaw: 0, tilt: 0 };
+  const out = [0, 0];
+
+  function setCamera(yawDeg, tiltDeg) {
+    const yaw = yawDeg * Math.PI / 180;
+    const tilt = (CONFIG.tilt + tiltDeg) * Math.PI / 180;
+    camera.cosY = Math.cos(yaw);
+    camera.sinY = Math.sin(yaw);
+    camera.cosT = Math.cos(tilt);
+    camera.sinT = Math.sin(tilt);
+  }
+
+  // Plano: x, y em px a partir do centro; z = altura (px)
+  function project(x, y, z) {
+    const xr = x * camera.cosY - y * camera.sinY;
+    const yr = x * camera.sinY + y * camera.cosY;
+    const depth = yr * camera.sinT + z * camera.cosT;
+    const f = CONFIG.perspective / (CONFIG.perspective - depth);
+    out[0] = camera.cx + xr * f;
+    out[1] = camera.cy + (yr * camera.cosT - z * camera.sinT) * f;
+    return out;
+  }
+  function unproject(px, py) {
+    const u = py - camera.cy;
+    const denominator = camera.cosT * CONFIG.perspective + u * camera.sinT;
+    if (denominator < 1e-3) return null;
+    const yr = u * CONFIG.perspective / denominator;
+    const f = CONFIG.perspective / (CONFIG.perspective - yr * camera.sinT);
+    const xr = (px - camera.cx) / f;
+    return [xr * camera.cosY + yr * camera.sinY, -xr * camera.sinY + yr * camera.cosY];
+  }
+
+  let nx = 2;
+  let ny = 2;
+  let cell = CONFIG.cell;
+  let halfX = 1;
+  let halfY = 1;
+  let values = new Float32Array(4);
+
+  function makeGrid() {
+    cell = compact ? CONFIG.cellCompact : CONFIG.cell;
+    halfX = width * .72;
+    halfY = height * .62 / Math.cos(CONFIG.tilt * Math.PI / 180);
+    nx = Math.ceil(2 * halfX / cell) + 1;
+    ny = Math.ceil(2 * halfY / cell) + 1;
+    values = new Float32Array(nx * ny);
+  }
+
+  // Relevo: as montanhas se deslocam e respiram devagar
+  const hillsNow = HILLS.map((h) => ({ ...h }));
+  function updateRelief(seconds) {
+    const t = seconds * CONFIG.breathe;
+    HILLS.forEach((h, k) => {
+      const now = hillsNow[k];
+      now.x = (h.u + Math.sin(t * (1 + k * .23) + k * 1.9) * .05) * halfX;
+      now.y = (h.v + Math.cos(t * (.8 + k * .17) + k * 2.7) * .06) * halfY;
+      now.w = h.w * (.85 + .15 * Math.sin(t * (1.3 + k * .11) + k));
+      now.ix = 1 / (h.sx * halfX * (1 + .08 * Math.sin(t + k)));
+      now.iy = 1 / (h.sy * halfY);
+      now.cosA = Math.cos(h.a + t * .3 * (k % 2 ? 1 : -1));
+      now.sinA = Math.sin(h.a + t * .3 * (k % 2 ? 1 : -1));
+    });
+    for (let j = 0; j < ny; j += 1) {
+      const y = -halfY + j * cell;
+      for (let i = 0; i < nx; i += 1) {
+        const x = -halfX + i * cell;
+        let v = 0;
+        for (const h of hillsNow) {
+          const dx = x - h.x;
+          const dy = y - h.y;
+          const a = (dx * h.cosA + dy * h.sinA) * h.ix;
+          const b = (-dx * h.sinA + dy * h.cosA) * h.iy;
+          v += h.w * Math.exp(-.5 * (a * a + b * b));
+        }
+        values[j * nx + i] = 1 - Math.exp(-1.6 * v);
+      }
+    }
+  }
+
+  function sample(x, y) {
+    const gx = clamp((x + halfX) / cell, 0, nx - 1.001);
+    const gy = clamp((y + halfY) / cell, 0, ny - 1.001);
+    const i = Math.floor(gx);
+    const j = Math.floor(gy);
+    const fx = gx - i;
+    const fy = gy - j;
+    const a = values[j * nx + i];
+    const b = values[j * nx + i + 1];
+    const c = values[(j + 1) * nx + i];
+    const d = values[(j + 1) * nx + i + 1];
+    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+  }
+
+  // Curvas de nível (marching squares), guardadas em coordenadas do plano por nível.
+  // Arestas: 0 = topo (a–b), 1 = direita (b–c), 2 = base (d–c), 3 = esquerda (a–d)
+  const CASES = [[], [3, 0], [0, 1], [3, 1], [1, 2], [3, 0, 1, 2], [0, 2], [3, 2],
+    [2, 3], [0, 2], [0, 1, 2, 3], [1, 2], [1, 3], [0, 1], [3, 0], []];
+  let segments = [];
+
+  function edge(list, e, i, j, t, a, b, c, d) {
+    let gx = i;
+    let gy = j;
+    if (e === 0) gx = i + (t - a) / (b - a);
+    else if (e === 1) { gx = i + 1; gy = j + (t - b) / (c - b); }
+    else if (e === 2) { gx = i + (t - d) / (c - d); gy = j + 1; }
+    else gy = j + (t - a) / (d - a);
+    list.push(-halfX + gx * cell, -halfY + gy * cell);
+  }
+
+  function traceContours() {
+    segments = [];
+    for (let k = 0; k < levels; k += 1) {
+      const t = (k + 1) / (levels + 1);
+      const list = [];
+      for (let j = 0; j < ny - 1; j += 1) {
+        for (let i = 0; i < nx - 1; i += 1) {
+          const a = values[j * nx + i];
+          const b = values[j * nx + i + 1];
+          const c = values[(j + 1) * nx + i + 1];
+          const d = values[(j + 1) * nx + i];
+          const code = (a > t ? 1 : 0) | (b > t ? 2 : 0) | (c > t ? 4 : 0) | (d > t ? 8 : 0);
+          if (code === 0 || code === 15) continue;
+          const pairs = CASES[code];
+          for (let p = 0; p < pairs.length; p += 2) {
+            edge(list, pairs[p], i, j, t, a, b, c, d);
+            edge(list, pairs[p + 1], i, j, t, a, b, c, d);
+          }
+        }
+      }
+      segments.push(list);
+    }
+  }
+
+  // Área vazia atrás do texto (máscara com borda suave)
+  let clearMask = null;
+  function measureClearArea() {
     const bounds = canvas.getBoundingClientRect();
-    const targets = [
-      [hero.querySelector('.hero__eyebrow'), 30],
-      ...[...hero.querySelectorAll('h1 span')].map((span) => [span, 30])
-    ];
-    // Uma única área cobrindo todo o bloco de texto: por dentro não sobra nenhum tijolo
     const box = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
-    for (const [element, pad] of targets) {
+    for (const element of [hero.querySelector('.hero__eyebrow'), ...hero.querySelectorAll('h1 span')]) {
       if (!element) continue;
       const range = document.createRange();
       range.selectNodeContents(element);
       const r = range.getBoundingClientRect();
-      box.left = Math.min(box.left, r.left - bounds.left - pad);
-      box.right = Math.max(box.right, r.right - bounds.left + pad);
-      box.top = Math.min(box.top, r.top - bounds.top - pad);
-      box.bottom = Math.max(box.bottom, r.bottom - bounds.top + pad);
+      box.left = Math.min(box.left, r.left - bounds.left);
+      box.right = Math.max(box.right, r.right - bounds.left);
+      box.top = Math.min(box.top, r.top - bounds.top);
+      box.bottom = Math.max(box.bottom, r.bottom - bounds.top);
     }
-    breaks = Number.isFinite(box.left) ? [box] : [];
-  };
-  const breakDistance = (x, y) => {
-    let nearest = Infinity;
-    for (const box of breaks) {
-      const dx = Math.max(box.left - x, 0, x - box.right);
-      const dy = Math.max(box.top - y, 0, y - box.bottom);
-      nearest = Math.min(nearest, Math.hypot(dx, dy));
-    }
-    return nearest;
-  };
-
-  const tonePalette = Array.from({ length: 64 }, (_, index) => {
-    const amount = index / 63 * .24;
-    return `rgb(${beigeChannels.map((channel) => Math.round(channel * amount)).join(', ')})`;
-  });
-  const tone = (amount) => tonePalette[Math.max(0, Math.min(63, Math.round(amount / .24 * 63)))];
-
-  const settleHeight = (state, target, dt, seconds, calm) => {
-    if (calm) {
-      state.x = target;
-      state.v = 0;
+    if (!Number.isFinite(box.left)) {
+      clearMask = null;
       return;
     }
-    const steps = 4;
-    const step = dt / steps;
-    const frequency = 1 / seconds;
-    for (let index = 0; index < steps; index += 1) {
-      // Slightly under-damped: a pressure change travels through the bed
-      // instead of every column stopping at its target independently.
-      state.v += (frequency * frequency * (target - state.x) - 1.16 * frequency * state.v) * step;
-      state.x += state.v * step;
+    const pad = CONFIG.clearPad;
+    const ratio = canvas.width / width;
+    clearMask = document.createElement('canvas');
+    clearMask.width = canvas.width;
+    clearMask.height = canvas.height;
+    const m = clearMask.getContext('2d');
+    m.setTransform(ratio, 0, 0, ratio, 0, 0);
+    // o retângulo vira uma "sombra" desfocada desenhada fora da tela (funciona em todos os navegadores)
+    const offset = width * 3;
+    m.shadowColor = '#000';
+    m.shadowBlur = CONFIG.clearFeather * ratio;
+    m.shadowOffsetX = offset * ratio;
+    m.fillStyle = '#000';
+    for (let pass = 0; pass < 2; pass += 1) {
+      m.fillRect(box.left - pad - offset, box.top - pad, box.right - box.left + 2 * pad, box.bottom - box.top + 2 * pad);
     }
-  };
+  }
 
-  const polygon = (points, fillTone, strokeAlpha, strokeColor = cream) => {
-    context.beginPath();
-    context.moveTo(points[0][0], points[0][1]);
-    for (let index = 1; index < points.length; index += 1) {
-      context.lineTo(points[index][0], points[index][1]);
-    }
-    context.closePath();
-    context.globalAlpha = 1;
-    context.fillStyle = fillTone;
-    context.fill();
-    context.globalAlpha = strokeAlpha;
-    context.strokeStyle = strokeColor;
-    context.stroke();
-  };
+  // Ponteiro: gira a câmera e escolhe a curva que se acende
+  const pointer = { sx: 0, sy: 0, inside: false, amount: 0, level: -1 };
+  let glow = new Float32Array(CONFIG.levels);
 
-  const draw = (time = 0) => {
-    frame = 0;
+  // Desenho de um quadro
+  function render() {
     context.clearRect(0, 0, width, height);
-
-    const dt = last ? Math.min((time - last) / 1000, 1 / 30) : 1 / 60;
-    last = time;
-    const compact = width < 620;
-    // Tijolo visto de cima: face de cima ≈ 2:1, junta de argamassa entre eles
-    const tileDepthY = compact ? 17 : 27;
-    const tileWidth = tileDepthY * 2.1;
-    const tileDepthX = compact ? 3 : 5;
-    const joint = compact ? 4 : 6;
-    const stepX = tileWidth + joint;
-    const stepY = tileDepthY + joint;
-    const rows = Math.ceil(height / stepY) + 5;
-    const columns = Math.ceil(width / stepX) + 6;
-    const seconds = time * .001;
-    const touring = !pointer.engaged && time - lastInteraction > 3600;
-    const targetX = touring ? width * (.5 + Math.sin(seconds * .19) * .31) : pointer.targetX;
-    const targetY = touring ? height * (.48 + Math.sin(seconds * .19 / PHI + GOLDEN_ANGLE) * .23) : pointer.targetY;
-    const follow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .14);
-    pointer.x += (targetX - pointer.x) * follow;
-    pointer.y += (targetY - pointer.y) * follow;
-    const pressureFollow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .075);
-    pointer.pressure += ((pointer.pressed ? 1 : 0) - pointer.pressure) * pressureFollow;
-    const measuredVelocityX = (pointer.x - pointer.previousX) / Math.max(dt, 1 / 240);
-    const measuredVelocityY = (pointer.y - pointer.previousY) / Math.max(dt, 1 / 240);
-    const velocityFollow = reducedMotion.matches ? 1 : 1 - Math.exp(-dt / .2);
-    pointer.velocityX += (measuredVelocityX - pointer.velocityX) * velocityFollow;
-    pointer.velocityY += (measuredVelocityY - pointer.velocityY) * velocityFollow;
-    pointer.previousX = pointer.x;
-    pointer.previousY = pointer.y;
-
-    const velocityMagnitude = Math.hypot(pointer.velocityX, pointer.velocityY);
-    const velocityScale = compact ? 430 : 720;
-    const flowSpeed = clamp(velocityMagnitude / velocityScale, 0, 1);
-    const flowDirectionX = velocityMagnitude > 1 ? pointer.velocityX / velocityMagnitude : 1;
-    const flowDirectionY = velocityMagnitude > 1 ? pointer.velocityY / velocityMagnitude : 0;
-    const reach = compact ? 170 : 285;
-
-    // Two quiet wave sources sit on conjugate golden sections. Their
-    // frequencies also differ by phi, producing a slowly changing field
-    // instead of a single repeating pulse.
-    const sourceOrbit = Math.min(width, height) * .035;
-    const sourceA = [
-      width / PHI + Math.cos(seconds * .11) * sourceOrbit,
-      height / (PHI * PHI) + Math.sin(seconds * .11) * sourceOrbit
-    ];
-    const sourceB = [
-      width / (PHI * PHI) + Math.cos(seconds * .11 + GOLDEN_ANGLE) * sourceOrbit,
-      height / PHI + Math.sin(seconds * .11 + GOLDEN_ANGLE) * sourceOrbit
-    ];
-
+    context.lineCap = 'round';
     context.lineJoin = 'round';
-    context.lineWidth = compact ? .55 : .7;
 
-    for (let row = -3; row < rows; row += 1) {
-      // Fiadas alternadas deslocadas meio tijolo, como numa parede
-      const rowOffset = (((row % 2) + 2) % 2) * stepX / 2;
-      for (let column = -3; column < columns; column += 1) {
-        const restingX = column * stepX + rowOffset - stepX * 1.5;
-        const restingY = row * stepY;
-        const centerX = restingX + (tileWidth + tileDepthX) * .5;
-        const centerY = restingY + tileDepthY * .5;
+    for (let k = 0; k < segments.length; k += 1) {
+      const list = segments[k];
+      if (!list.length) continue;
+      const share = (k + 1) / (levels + 1);
+      const index = k % CONFIG.indexEvery === CONFIG.indexEvery - 1;
+      const base = .05 + .3 * share + (index ? .07 : 0);
+      const z = share * relief;
 
-        // Quebra em volta do texto: dentro do vão o tijolo some; na borda ele afunda e escurece
-        const grain = hash(row, column);
-        const ragged = hash(column + 7919, row - 104729) * stepY * 1.8;
-        const gap = breakDistance(centerX, centerY) - ragged;
-        if (gap <= 0) continue;
-        const intact = smooth(0, stepY * 1.4, gap);
-        const relativeX = centerX - pointer.x;
-        const relativeY = centerY - pointer.y;
-        const distance = Math.hypot(relativeX, relativeY);
-        const distanceRatio = distance / reach;
-        const angle = Math.atan2(relativeY, relativeX);
-        const core = Math.exp(-Math.pow(distanceRatio / .22, 2));
-        const circulation = (1 - Math.exp(-Math.pow(distanceRatio / .2, 2)))
-          * Math.exp(-distanceRatio * 1.5) / (distanceRatio + .16);
-        const spiralPhase = angle
-          - Math.log(Math.max(distanceRatio, .045)) / GOLDEN_PITCH
-          - seconds * .48;
-        const spiralWave = Math.sin(spiralPhase) * Math.exp(-distanceRatio * 1.15);
-        const collar = Math.exp(-Math.pow((distanceRatio - .3) / .15, 2));
+      context.beginPath();
+      for (let n = 0; n < list.length; n += 4) {
+        project(list[n], list[n + 1], z);
+        context.moveTo(out[0], out[1]);
+        project(list[n + 2], list[n + 3], z);
+        context.lineTo(out[0], out[1]);
+      }
+      // Linhas ao fundo (topo da tela) mais apagadas: dá profundidade
+      const fadeStyle = context.createLinearGradient(0, 0, 0, height);
+      fadeStyle.addColorStop(0, ink(base * .35));
+      fadeStyle.addColorStop(.45, ink(base * .85));
+      fadeStyle.addColorStop(1, ink(base));
+      context.strokeStyle = fadeStyle;
+      context.lineWidth = index ? (compact ? .95 : 1.15) : (compact ? .5 : .62);
+      context.stroke();
 
-        const behind = -(relativeX * flowDirectionX + relativeY * flowDirectionY);
-        const across = relativeX * -flowDirectionY + relativeY * flowDirectionX;
-        const wakeEnvelope = behind > 0
-          ? Math.exp(-behind / (reach * 1.3)) * Math.exp(-Math.abs(across) / (reach * .34))
-          : 0;
-        const wakeWave = Math.sin(behind * (compact ? .105 : .072) - seconds * 2 / PHI)
-          * wakeEnvelope * flowSpeed;
-
-        const distanceA = Math.hypot(centerX - sourceA[0], centerY - sourceA[1]);
-        const distanceB = Math.hypot(centerX - sourceB[0], centerY - sourceB[1]);
-        const waveA = Math.sin(distanceA * (compact ? .052 : .035) - seconds * .72);
-        const waveB = Math.sin(distanceB * (compact ? .052 : .035) * PHI + seconds * .72 / PHI);
-        const interference = waveA * .58 + waveB * .42;
-
-        const impactAge = seconds - impact.at;
-        const impactDistance = Math.hypot(centerX - impact.x, centerY - impact.y);
-        const shockSpeed = compact ? 230 : 380;
-        const shockWidth = compact ? 30 : 48;
-        const shockRadius = impactAge * shockSpeed;
-        const shockFront = Math.exp(-Math.pow((impactDistance - shockRadius) / shockWidth, 2));
-        const shockTail = Math.exp(-Math.pow((impactDistance - shockRadius + shockWidth * 1.35) / (shockWidth * 1.45), 2));
-        const impactCore = Math.exp(-Math.pow(impactDistance / (compact ? 50 : 78), 2));
-        const impactDecay = !reducedMotion.matches && impactAge >= 0 && impactAge < 2
-          ? Math.exp(-impactAge * 1.45)
-          : 0;
-        const shockAttack = 1 - Math.exp(-Math.max(0, impactAge) * 11);
-        const impactLift = (
-          shockFront * shockAttack * (compact ? 48 : 76)
-          - shockTail * (compact ? 12 : 19)
-          - impactCore * Math.exp(-Math.max(0, impactAge) * 4.8) * (compact ? 27 : 43)
-        ) * impactDecay;
-
-        // Movimento baixo e arredondado: um inchaço suave sob o cursor, ondas circulares
-        // que saem dele e só um traço da espiral (as alturas são ~1/3 das anteriores)
-        const swell = Math.exp(-Math.pow(distanceRatio / .55, 2));
-        const ripple = Math.cos(distanceRatio * 9 - seconds * 2.2) * Math.exp(-distanceRatio * 1.6);
-        const pressureWell = -core * (compact ? 6 : 9) * (1 + pointer.pressure * .9);
-        const circulatingCrest = spiralWave * circulation * (compact ? 4 : 6);
-        const pressureCollar = (swell * (compact ? 10 : 14) + ripple * (compact ? 4 : 6)) * (.8 + pointer.pressure * .6);
-        const wakeLift = wakeWave * (compact ? 5 : 8);
-        const ambientLift = (compact ? 5 : 6) + interference * (compact ? 2 : 3);
-        const interactionLift = pressureWell + circulatingCrest + pressureCollar + wakeLift + impactLift * .4;
-        const targetLift = clamp(
-          ambientLift + interactionLift,
-          1.5,
-          compact ? 30 : 42
-        );
-        const key = `${row}:${column}`;
-        let heightState = heights.get(key);
-        if (!heightState) {
-          heightState = { x: targetLift, v: 0 };
-          heights.set(key, heightState);
-        }
-        settleHeight(heightState, targetLift, dt, compact ? .17 : .21, reducedMotion.matches);
-        const lift = clamp(heightState.x * (.25 + .75 * intact), .75, compact ? 36 : 50);
-
-        const tangentX = distance > 1 ? -relativeY / distance : 0;
-        const tangentY = distance > 1 ? relativeX / distance : 0;
-        const flowShift = circulation * (compact ? 1.6 : 2.6) * (1 + pointer.pressure * .65);
-        const wakeShift = wakeEnvelope * flowSpeed * (compact ? 3.2 : 5.4);
-        const groundX = restingX + tangentX * flowShift - flowDirectionX * wakeShift;
-        const groundY = restingY + tangentY * flowShift - flowDirectionY * wakeShift;
-
-        const baseA = [groundX, groundY];
-        const baseB = [groundX + tileWidth, groundY];
-        const baseC = [groundX + tileWidth + tileDepthX, groundY + tileDepthY];
-        const baseD = [groundX + tileDepthX, groundY + tileDepthY];
-        const topA = [baseA[0], baseA[1] - lift];
-        const topB = [baseB[0], baseB[1] - lift];
-        const topC = [baseC[0], baseC[1] - lift];
-        const topD = [baseD[0], baseD[1] - lift];
-        const fluidEnergy = clamp(
-          .5 + interactionLift / (compact ? 22 : 32) + interference * .08,
-          0,
-          1
-        );
-        const light = (.28 + fluidEnergy * .72) * (.45 + .55 * intact);
-        const shade = (grain - .5) * .028;
-
-        // True solid faces, painted back-to-front inside each prism.
-        polygon([topB, topC, baseC, baseB], tone(.035 + light * .035 + shade), .1 + light * .1);
-        polygon([topD, topC, baseC, baseD], tone(.055 + light * .055 + shade), .12 + light * .11);
-        polygon([topA, topB, topC, topD], tone(.08 + light * .1 + shade), .15 + light * .14);
-
-        // Porosidade: alguns pontinhos fixos no topo de cada tijolo
-        for (let speck = 0; speck < 5; speck += 1) {
-          const u = hash(row * 31 + speck, column - speck * 7);
-          const v = hash(column * 17 + speck, row + speck * 13);
-          const sx = topA[0] + u * tileWidth + v * tileDepthX;
-          const sy = topA[1] + v * tileDepthY;
-          context.globalAlpha = .22;
-          context.fillStyle = speck % 2 ? '#000' : beige;
-          context.fillRect(sx, sy, compact ? 1 : 1.4, compact ? 1 : 1.4);
-        }
-
-        // Aresta de luz na borda da frente, para ler o volume do tijolo
-        context.globalAlpha = .06 + light * .1;
-        context.strokeStyle = cream;
-        context.beginPath();
-        context.moveTo(topD[0], topD[1]);
-        context.lineTo(topC[0], topC[1]);
+      // A curva sob o ponteiro se acende (com transição suave entre curvas)
+      if (glow[k] > .01) {
+        context.strokeStyle = ink(.85 * glow[k]);
+        context.lineWidth = compact ? 1.1 : 1.35;
         context.stroke();
       }
     }
 
-    context.globalAlpha = 1;
-    if (visible && !reducedMotion.matches) frame = requestAnimationFrame(draw);
-  };
+    // Esvazia a área do texto
+    if (clearMask) {
+      context.save();
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.globalCompositeOperation = 'destination-out';
+      context.drawImage(clearMask, 0, 0);
+      context.restore();
+    }
+  }
 
-  const resize = () => {
+  // Loop e eventos
+  let visible = true;
+  let running = false;
+  let last = 0;
+  let clock = 0;
+  let sinceRelief = Infinity;
+
+  function updatePointer(dt) {
+    pointer.amount += ((pointer.inside ? 1 : 0) - pointer.amount) * (1 - Math.exp(-dt / .5));
+    const idleYaw = Math.sin(clock * .05) * 3;
+    const targetYaw = pointer.inside ? (pointer.sx / width - .5) * 2 * CONFIG.yawRange : idleYaw;
+    const targetTilt = pointer.inside ? (pointer.sy / height - .5) * -2 * CONFIG.tiltRange : 0;
+    const follow = 1 - Math.exp(-dt / .7);
+    camera.yaw += (targetYaw - camera.yaw) * follow;
+    camera.tilt += (targetTilt - camera.tilt) * follow;
+    setCamera(camera.yaw, camera.tilt);
+
+    // Qual curva está sob o ponteiro
+    pointer.level = -1;
+    if (pointer.inside) {
+      const ground = unproject(pointer.sx, pointer.sy);
+      if (ground && Math.abs(ground[0]) < halfX && Math.abs(ground[1]) < halfY) {
+        const value = sample(ground[0], ground[1]);
+        const k = Math.round(value * (levels + 1)) - 1;
+        if (k >= 0 && k < levels) pointer.level = k;
+      }
+    }
+    const fadeRate = 1 - Math.exp(-dt / .25);
+    for (let k = 0; k < levels; k += 1) {
+      const target = k === pointer.level ? pointer.amount : 0;
+      glow[k] += (target - glow[k]) * fadeRate;
+    }
+  }
+
+  function frame(now) {
+    const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 1 / 60;
+    last = now;
+    clock += dt;
+    // As montanhas mudam devagar: recalcular ~15 vezes por segundo é suficiente
+    sinceRelief += dt;
+    if (sinceRelief > 1 / 15) {
+      sinceRelief = 0;
+      updateRelief(clock);
+      traceContours();
+    }
+    updatePointer(dt);
+    render();
+    if (visible && !reducedMotion.matches) {
+      requestAnimationFrame(frame);
+    } else {
+      running = false;
+    }
+  }
+
+  function drawStill() {
+    setCamera(0, 0);
+    updateRelief(clock);
+    traceContours();
+    render();
+  }
+
+  function start() {
+    if (reducedMotion.matches) {
+      drawStill();
+      return;
+    }
+    if (running || !visible) return;
+    running = true;
+    last = 0;
+    requestAnimationFrame(frame);
+  }
+
+  function resize() {
     const bounds = canvas.getBoundingClientRect();
     const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
     width = Math.max(1, bounds.width);
     height = Math.max(1, bounds.height);
+    compact = width < 620;
+    levels = compact ? CONFIG.levelsCompact : CONFIG.levels;
+    glow = new Float32Array(levels);
+    relief = height * CONFIG.relief;
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    heights.clear();
-    measureBreaks();
-    if (!pointer.x && !pointer.y) {
-      pointer.x = pointer.targetX = width * .58;
-      pointer.y = pointer.targetY = height * .5;
-      pointer.previousX = pointer.x;
-      pointer.previousY = pointer.y;
-    }
-    last = 0;
-    draw(performance.now());
-  };
+    camera.cx = width / 2;
+    camera.cy = height * .56;
+    setCamera(camera.yaw, camera.tilt);
+    makeGrid();
+    measureClearArea();
+    sinceRelief = Infinity;
+    drawStill();
+  }
 
-  const restart = () => {
-    cancelAnimationFrame(frame);
-    frame = 0;
-    draw(performance.now());
-  };
-
-  const pointToCanvas = (event) => {
+  hero.addEventListener('pointermove', (event) => {
     const bounds = canvas.getBoundingClientRect();
-    pointer.targetX = event.clientX - bounds.left;
-    pointer.targetY = event.clientY - bounds.top;
-    pointer.engaged = true;
-    lastInteraction = performance.now();
+    pointer.sx = event.clientX - bounds.left;
+    pointer.sy = event.clientY - bounds.top;
+    pointer.inside = event.pointerType === 'mouse' && pointer.sy > 0;
     if (reducedMotion.matches) {
-      pointer.x = pointer.targetX;
-      pointer.y = pointer.targetY;
-      draw(lastInteraction);
-    } else if (!frame) {
-      frame = requestAnimationFrame(draw);
+      updatePointer(1);
+      render();
     }
-  };
-
-  hero.addEventListener('pointermove', pointToCanvas, { passive: true });
-  hero.addEventListener('pointerdown', (event) => {
-    pointToCanvas(event);
-    pointer.pressed = true;
-    impact.x = pointer.targetX;
-    impact.y = pointer.targetY;
-    impact.at = performance.now() * .001;
-  }, { passive: true });
-  hero.addEventListener('pointerup', () => {
-    pointer.pressed = false;
-  }, { passive: true });
-  hero.addEventListener('pointercancel', () => {
-    pointer.pressed = false;
   }, { passive: true });
   hero.addEventListener('pointerleave', () => {
-    pointer.engaged = false;
-    pointer.pressed = false;
-    lastInteraction = performance.now();
+    pointer.inside = false;
+    if (reducedMotion.matches) {
+      updatePointer(1);
+      render();
+    }
   });
 
-  new ResizeObserver(resize).observe(canvas);
-  // A fonte do nome muda a largura do texto: mede a quebra de novo quando ela carregar
-  document.fonts?.ready.then(() => { measureBreaks(); if (!frame) restart(); });
+  let resizeTimer = 0;
+  new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(resize, 100);
+  }).observe(canvas);
   new IntersectionObserver((entries) => {
     visible = entries[entries.length - 1].isIntersecting;
-    if (visible && !frame) restart();
+    if (visible) start();
   }, { rootMargin: '120px 0px', threshold: .01 }).observe(canvas);
-  reducedMotion.addEventListener('change', restart);
+  reducedMotion.addEventListener('change', () => {
+    running = false;
+    start();
+  });
+  // A fonte do nome muda a largura do texto: mede a área vazia de novo quando ela carregar
+  document.fonts?.ready.then(() => {
+    measureClearArea();
+    if (reducedMotion.matches) drawStill();
+  });
+
+  resize();
+  start();
 })();
