@@ -23,8 +23,8 @@
   const CONFIG = {
     cell: 10,            // célula da grade (px do plano); menor = curvas mais lisas
     cellCompact: 8,
-    levels: 20,          // número de curvas de nível
-    levelsCompact: 16,
+    levels: 14,          // número de curvas de nível
+    levelsCompact: 11,
     indexEvery: 5,       // a cada N curvas, uma mais grossa (como em mapas)
     relief: .4,          // altura do pico mais alto (fração da altura da tela)
     tilt: 56,            // inclinação da câmera (graus; 0 = vista de cima)
