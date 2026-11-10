@@ -1,4 +1,6 @@
-// Fundo animado do hero: um campo de prismas que reage ao ponteiro.
+// Fundo animado do hero: um piso de tijolos que reage ao ponteiro.
+// Atrás do nome e das áreas (Data analysis, Data science, Data visualization)
+// os tijolos se quebram, abrindo um vão de bordas irregulares para o texto.
 // Desenhado em <canvas data-terrain-field> e pausado fora da tela
 // ou com prefers-reduced-motion.
 (() => {
@@ -8,7 +10,9 @@
 
   const context = canvas.getContext('2d');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const beige = getComputedStyle(document.documentElement).getPropertyValue('--beige').trim() || '#d9d1c4';
+  const rootStyle = getComputedStyle(document.documentElement);
+  const beige = rootStyle.getPropertyValue('--beige').trim() || '#d9d1c4';
+  const cream = rootStyle.getPropertyValue('--cream').trim() || '#f0e6cc'; // off-white das linhas
   const beigeMatch = beige.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
   const beigeChannels = beigeMatch
     ? beigeMatch.slice(1).map((channel) => Number.parseInt(channel, 16))
@@ -38,6 +42,48 @@
   const GOLDEN_ANGLE = Math.PI * 2 / (PHI * PHI);
   const GOLDEN_PITCH = 2 * Math.log(PHI) / Math.PI;
   const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
+  const smooth = (edge0, edge1, value) => {
+    const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+  };
+  // Número pseudoaleatório fixo por tijolo (0–1): variação de tom e borda irregular da quebra
+  const hash = (a, b) => {
+    let h = Math.imul(a, 374761393) + Math.imul(b, 668265263);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+
+  // Área do texto (em px do canvas) onde os tijolos se quebram
+  let breaks = [];
+  const measureBreaks = () => {
+    const bounds = canvas.getBoundingClientRect();
+    const targets = [
+      [hero.querySelector('.hero__eyebrow'), 30],
+      ...[...hero.querySelectorAll('h1 span')].map((span) => [span, 30])
+    ];
+    // Uma única área cobrindo todo o bloco de texto: por dentro não sobra nenhum tijolo
+    const box = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+    for (const [element, pad] of targets) {
+      if (!element) continue;
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const r = range.getBoundingClientRect();
+      box.left = Math.min(box.left, r.left - bounds.left - pad);
+      box.right = Math.max(box.right, r.right - bounds.left + pad);
+      box.top = Math.min(box.top, r.top - bounds.top - pad);
+      box.bottom = Math.max(box.bottom, r.bottom - bounds.top + pad);
+    }
+    breaks = Number.isFinite(box.left) ? [box] : [];
+  };
+  const breakDistance = (x, y) => {
+    let nearest = Infinity;
+    for (const box of breaks) {
+      const dx = Math.max(box.left - x, 0, x - box.right);
+      const dy = Math.max(box.top - y, 0, y - box.bottom);
+      nearest = Math.min(nearest, Math.hypot(dx, dy));
+    }
+    return nearest;
+  };
 
   const tonePalette = Array.from({ length: 64 }, (_, index) => {
     const amount = index / 63 * .24;
@@ -62,7 +108,7 @@
     }
   };
 
-  const polygon = (points, fillTone, strokeAlpha) => {
+  const polygon = (points, fillTone, strokeAlpha, strokeColor = cream) => {
     context.beginPath();
     context.moveTo(points[0][0], points[0][1]);
     for (let index = 1; index < points.length; index += 1) {
@@ -73,7 +119,7 @@
     context.fillStyle = fillTone;
     context.fill();
     context.globalAlpha = strokeAlpha;
-    context.strokeStyle = beige;
+    context.strokeStyle = strokeColor;
     context.stroke();
   };
 
@@ -84,13 +130,13 @@
     const dt = last ? Math.min((time - last) / 1000, 1 / 30) : 1 / 60;
     last = time;
     const compact = width < 620;
-    const depthX = compact ? 9 : 16;
-    const depthY = compact ? 21 : 34;
-    const tileDepthX = depthX * .78;
-    const tileDepthY = depthY - (compact ? 2 : 3);
-    const tileWidth = Math.hypot(tileDepthX, tileDepthY) * PHI;
-    const stepX = tileWidth + (compact ? 5 : 7);
-    const stepY = depthY + (compact ? 4 : 6);
+    // Tijolo visto de cima: face de cima ≈ 2:1, junta de argamassa entre eles
+    const tileDepthY = compact ? 17 : 27;
+    const tileWidth = tileDepthY * 2.1;
+    const tileDepthX = compact ? 3 : 5;
+    const joint = compact ? 4 : 6;
+    const stepX = tileWidth + joint;
+    const stepY = tileDepthY + joint;
     const rows = Math.ceil(height / stepY) + 5;
     const columns = Math.ceil(width / stepX) + 6;
     const seconds = time * .001;
@@ -134,14 +180,20 @@
     context.lineWidth = compact ? .55 : .7;
 
     for (let row = -3; row < rows; row += 1) {
-      // A golden-ratio advance removes the obvious brick repeat while
-      // keeping every prism separate and consistently proportioned.
-      const rowOffset = ((row * stepX / PHI) % stepX + stepX) % stepX;
+      // Fiadas alternadas deslocadas meio tijolo, como numa parede
+      const rowOffset = (((row % 2) + 2) % 2) * stepX / 2;
       for (let column = -3; column < columns; column += 1) {
         const restingX = column * stepX + rowOffset - stepX * 1.5;
         const restingY = row * stepY;
         const centerX = restingX + (tileWidth + tileDepthX) * .5;
         const centerY = restingY + tileDepthY * .5;
+
+        // Quebra em volta do texto: dentro do vão o tijolo some; na borda ele afunda e escurece
+        const grain = hash(row, column);
+        const ragged = hash(column + 7919, row - 104729) * stepY * 1.8;
+        const gap = breakDistance(centerX, centerY) - ragged;
+        if (gap <= 0) continue;
+        const intact = smooth(0, stepY * 1.4, gap);
         const relativeX = centerX - pointer.x;
         const relativeY = centerY - pointer.y;
         const distance = Math.hypot(relativeX, relativeY);
@@ -188,16 +240,20 @@
           - impactCore * Math.exp(-Math.max(0, impactAge) * 4.8) * (compact ? 27 : 43)
         ) * impactDecay;
 
-        const pressureWell = -core * (compact ? 28 : 44) * (1 + pointer.pressure * .95);
-        const circulatingCrest = spiralWave * circulation * (compact ? 34 : 56) * (1 + pointer.pressure * .55);
-        const pressureCollar = collar * (compact ? 20 : 32) * (.7 + pointer.pressure * .75);
-        const wakeLift = wakeWave * (compact ? 18 : 28);
-        const ambientLift = (compact ? 12 : 15) + interference * (compact ? 5 : 8);
-        const interactionLift = pressureWell + circulatingCrest + pressureCollar + wakeLift + impactLift;
+        // Movimento baixo e arredondado: um inchaço suave sob o cursor, ondas circulares
+        // que saem dele e só um traço da espiral (as alturas são ~1/3 das anteriores)
+        const swell = Math.exp(-Math.pow(distanceRatio / .55, 2));
+        const ripple = Math.cos(distanceRatio * 9 - seconds * 2.2) * Math.exp(-distanceRatio * 1.6);
+        const pressureWell = -core * (compact ? 6 : 9) * (1 + pointer.pressure * .9);
+        const circulatingCrest = spiralWave * circulation * (compact ? 4 : 6);
+        const pressureCollar = (swell * (compact ? 10 : 14) + ripple * (compact ? 4 : 6)) * (.8 + pointer.pressure * .6);
+        const wakeLift = wakeWave * (compact ? 5 : 8);
+        const ambientLift = (compact ? 5 : 6) + interference * (compact ? 2 : 3);
+        const interactionLift = pressureWell + circulatingCrest + pressureCollar + wakeLift + impactLift * .4;
         const targetLift = clamp(
           ambientLift + interactionLift,
-          2,
-          compact ? 105 : 155
+          1.5,
+          compact ? 30 : 42
         );
         const key = `${row}:${column}`;
         let heightState = heights.get(key);
@@ -206,11 +262,11 @@
           heights.set(key, heightState);
         }
         settleHeight(heightState, targetLift, dt, compact ? .17 : .21, reducedMotion.matches);
-        const lift = clamp(heightState.x, .75, compact ? 130 : 190);
+        const lift = clamp(heightState.x * (.25 + .75 * intact), .75, compact ? 36 : 50);
 
         const tangentX = distance > 1 ? -relativeY / distance : 0;
         const tangentY = distance > 1 ? relativeX / distance : 0;
-        const flowShift = circulation * (compact ? 4.6 : 7.8) * (1 + pointer.pressure * .65);
+        const flowShift = circulation * (compact ? 1.6 : 2.6) * (1 + pointer.pressure * .65);
         const wakeShift = wakeEnvelope * flowSpeed * (compact ? 3.2 : 5.4);
         const groundX = restingX + tangentX * flowShift - flowDirectionX * wakeShift;
         const groundY = restingY + tangentY * flowShift - flowDirectionY * wakeShift;
@@ -224,16 +280,36 @@
         const topC = [baseC[0], baseC[1] - lift];
         const topD = [baseD[0], baseD[1] - lift];
         const fluidEnergy = clamp(
-          .5 + interactionLift / (compact ? 62 : 96) + interference * .08,
+          .5 + interactionLift / (compact ? 22 : 32) + interference * .08,
           0,
           1
         );
-        const light = .28 + fluidEnergy * .72;
+        const light = (.28 + fluidEnergy * .72) * (.45 + .55 * intact);
+        const shade = (grain - .5) * .028;
 
         // True solid faces, painted back-to-front inside each prism.
-        polygon([topB, topC, baseC, baseB], tone(.035 + light * .035), .1 + light * .1);
-        polygon([topD, topC, baseC, baseD], tone(.055 + light * .055), .12 + light * .11);
-        polygon([topA, topB, topC, topD], tone(.08 + light * .1), .15 + light * .14);
+        polygon([topB, topC, baseC, baseB], tone(.035 + light * .035 + shade), .1 + light * .1);
+        polygon([topD, topC, baseC, baseD], tone(.055 + light * .055 + shade), .12 + light * .11);
+        polygon([topA, topB, topC, topD], tone(.08 + light * .1 + shade), .15 + light * .14);
+
+        // Porosidade: alguns pontinhos fixos no topo de cada tijolo
+        for (let speck = 0; speck < 5; speck += 1) {
+          const u = hash(row * 31 + speck, column - speck * 7);
+          const v = hash(column * 17 + speck, row + speck * 13);
+          const sx = topA[0] + u * tileWidth + v * tileDepthX;
+          const sy = topA[1] + v * tileDepthY;
+          context.globalAlpha = .22;
+          context.fillStyle = speck % 2 ? '#000' : beige;
+          context.fillRect(sx, sy, compact ? 1 : 1.4, compact ? 1 : 1.4);
+        }
+
+        // Aresta de luz na borda da frente, para ler o volume do tijolo
+        context.globalAlpha = .06 + light * .1;
+        context.strokeStyle = cream;
+        context.beginPath();
+        context.moveTo(topD[0], topD[1]);
+        context.lineTo(topC[0], topC[1]);
+        context.stroke();
       }
     }
 
@@ -250,6 +326,7 @@
     canvas.height = Math.round(height * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     heights.clear();
+    measureBreaks();
     if (!pointer.x && !pointer.y) {
       pointer.x = pointer.targetX = width * .58;
       pointer.y = pointer.targetY = height * .5;
@@ -302,6 +379,8 @@
   });
 
   new ResizeObserver(resize).observe(canvas);
+  // A fonte do nome muda a largura do texto: mede a quebra de novo quando ela carregar
+  document.fonts?.ready.then(() => { measureBreaks(); if (!frame) restart(); });
   new IntersectionObserver((entries) => {
     visible = entries[entries.length - 1].isIntersecting;
     if (visible && !frame) restart();

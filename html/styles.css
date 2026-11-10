@@ -3,10 +3,11 @@
 :root {
   color-scheme: dark;
   --bg: #000;
-  --beige: #d9d1c4;
-  --text: var(--beige);
-  --warm: var(--beige);
-  --muted: rgba(217, 209, 196, .64);
+  --beige: #d9d1c4;          /* tom dos tijolos e das linhas */
+  --cream: #f0e6cc;          /* off-white amarelado dos textos */
+  --text: var(--cream);
+  --warm: var(--cream);
+  --muted: rgba(240, 230, 204, .64);
   --line: rgba(217, 209, 196, .2);
   --line-soft: rgba(217, 209, 196, .09);
   --pad: clamp(22px, 5vw, 76px);
@@ -243,7 +244,7 @@ h2 {
 .about__copy p {
   max-width: 780px;
   margin: 42px 0 0;
-  color: rgba(217, 209, 196, .82);
+  color: rgba(240, 230, 204, .82);
   font-size: clamp(17px, 1.6vw, 22px);
   line-height: 1.7;
 }
