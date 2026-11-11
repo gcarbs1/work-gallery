@@ -449,6 +449,31 @@ h2 {
 .project-card:focus-visible .project-card__media::after { border-color: var(--warm); }
 .project-card:focus-visible { outline: 2px solid var(--warm); outline-offset: 8px; }
 
+/* Repository button in the bottom-right corner of each card. */
+.project-item { position: relative; align-self: start; }
+.project-item .project-card__body { padding-right: 52px; }
+.project-github {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  color: var(--warm);
+  background: var(--bg);
+  transition: color .3s var(--ease), background .3s var(--ease),
+    border-color .3s var(--ease), transform .3s var(--ease);
+}
+.project-github:hover, .project-github:focus-visible {
+  color: var(--bg);
+  background: var(--warm);
+  border-color: var(--warm);
+  transform: translateY(-3px);
+}
+.project-github:focus-visible { outline: 2px solid var(--warm); outline-offset: 4px; }
+
 /* 9. Contato e rodapé */
 .contact { padding-block: clamp(110px, 14vw, 190px) 52px; background: var(--bg); }
 .contact p { max-width: 580px; margin: 30px 0 0; color: var(--muted); font-size: 16px; line-height: 1.65; }
