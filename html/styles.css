@@ -416,6 +416,15 @@ h2 {
   object-fit: cover;
   transition: transform .7s var(--ease), filter .7s var(--ease);
 }
+.project-card__media--poster {
+  border: 0;
+  background: transparent;
+}
+.project-card__media--poster::after { display: none; }
+.project-card__media--poster img {
+  object-fit: contain;
+  object-position: center;
+}
 .project-card__body {
   display: grid;
   gap: 8px;
@@ -436,6 +445,8 @@ h2 {
 }
 .project-card:hover .project-card__media img,
 .project-card:focus-visible .project-card__media img { transform: scale(1.025); filter: contrast(1.04); }
+.project-card:hover .project-card__media--poster img,
+.project-card:focus-visible .project-card__media--poster img { transform: none; filter: none; }
 .project-card:hover .project-card__media::after,
 .project-card:focus-visible .project-card__media::after { border-color: var(--warm); }
 .project-card:focus-visible { outline: 2px solid var(--warm); outline-offset: 8px; }
