@@ -383,29 +383,11 @@ h2 {
 
 /* 8. Projetos */
 .projects { padding-block: clamp(110px, 14vw, 190px); }
-.projects__head { margin-bottom: clamp(56px, 7vw, 92px); }
-.project-groups { border-top: 1px solid var(--line); }
-.project-group { border-bottom: 1px solid var(--line); }
-.project-group__heading {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 24px;
-  align-items: center;
-  min-height: 86px;
-}
-.project-group__heading h3 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(22px, 2.2vw, 34px);
-  font-weight: 700;
-  letter-spacing: -.03em;
-}
-.section-note { color: var(--muted); }
+.projects__head { margin-bottom: clamp(48px, 6vw, 76px); }
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(28px, 4vw, 58px);
-  padding: 0 0 clamp(48px, 6vw, 82px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(24px, 3vw, 42px);
 }
 .project-card {
   display: block;
@@ -436,13 +418,11 @@ h2 {
 }
 .project-card__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 20px;
-  align-items: baseline;
-  padding-top: 18px;
+  gap: 8px;
+  padding-top: 14px;
 }
 .project-card__body strong {
-  font-size: clamp(19px, 1.8vw, 27px);
+  font-size: clamp(17px, 1.35vw, 22px);
   font-weight: 520;
   line-height: 1.2;
   letter-spacing: -.025em;
@@ -502,7 +482,7 @@ h2 {
 
 @media (max-width: 980px) {
   .about { grid-template-columns: 220px 1fr; gap: 54px; }
-  .project-grid { grid-template-columns: 1fr; }
+  .project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
@@ -541,8 +521,7 @@ h2 {
   .event { min-height: 0; padding: 0 0 42px 12px; }
   .event + .event { padding-left: 12px; }
   .event::before { top: 0; left: -26px; }
-  .project-group__heading { min-height: 76px; }
-  .project-card__body { grid-template-columns: 1fr; gap: 9px; }
+  .project-grid { grid-template-columns: 1fr; }
   .project-card__tools { white-space: normal; }
   .contact__foot { flex-direction: column; }
   .contact-button { width: 100%; }
