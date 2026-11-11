@@ -530,9 +530,14 @@ h2 {
   .hero::after { inset: 64px 0 0; }
   .hero__eyebrow { max-width: 330px; gap: 8px 10px; line-height: 1.45; }
   .terrain-field {
-    inset: 64px 0 0;
+    /* Mantém as proporções do relevo e o recorta dentro do hero estreito,
+       em vez de comprimir o campo de densidade na largura do celular. */
+    inset: 64px auto 0 50%;
+    width: max(100%, 680px);
+    max-width: none;
     height: calc(100% - 64px);
     opacity: .84;
+    transform: translateX(-50%);
   }
   h1 { font-size: clamp(52px, 13.5vw, 66px); }
   h1 span:last-child { margin-left: .11em; }
