@@ -445,8 +445,6 @@ h2 {
 }
 .project-card:hover .project-card__media img,
 .project-card:focus-visible .project-card__media img { transform: scale(1.025); filter: contrast(1.04); }
-.project-card:hover .project-card__media--poster img,
-.project-card:focus-visible .project-card__media--poster img { transform: none; filter: none; }
 .project-card:hover .project-card__media::after,
 .project-card:focus-visible .project-card__media::after { border-color: var(--warm); }
 .project-card:focus-visible { outline: 2px solid var(--warm); outline-offset: 8px; }
