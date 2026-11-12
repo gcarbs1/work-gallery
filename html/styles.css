@@ -416,7 +416,9 @@ h2 {
   object-fit: cover;
   transition: transform .7s var(--ease), filter .7s var(--ease);
 }
+/* A4 posters keep their own proportion, so a row of them reads as a set. */
 .project-card__media--poster {
+  aspect-ratio: 707 / 1000;
   border: 0;
   background: transparent;
 }
